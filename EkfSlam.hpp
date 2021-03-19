@@ -19,6 +19,7 @@ namespace ekf_slam {
              std::size_t OBJECT_MEAS_DIM, typename T>
     class EKFSlam {
       public:
+        // Type declarations
         using VehicleDynamic = Dynamic<VEHICLE_STATE_DIM, VEHICLE_MEAS_DIM, EmptyType, T>;
         using ObjectDynamic = Dynamic<OBJECT_STATE_DIM, OBJECT_MEAS_DIM, typename VehicleDynamic::X, T>;
 
@@ -26,7 +27,9 @@ namespace ekf_slam {
         using P = Eigen::MatrixXd;
         using Z = Eigen::VectorXd;
         using S = Eigen::MatrixXd;
-        using Measurements = std::vector<typename ObjectDynamic::Z>;
+
+        using ObjectMeasurements = std::vector<typename ObjectDynamic::Z>;
+        using TrackList = std::vector<std::pair<typename ObjectDynamic::X, typename ObjectDynamic::P>>;
 
         using InitialEstFunc =
                 std::function<auto(typename ObjectDynamic::Z, typename VehicleDynamic::X)->typename ObjectDynamic::X>;
@@ -34,31 +37,39 @@ namespace ekf_slam {
                 std::function<auto(typename ObjectDynamic::Z, typename VehicleDynamic::X, typename VehicleDynamic::P)
                                       ->typename ObjectDynamic::P>; // R is added separately
 
+        // Functions to be used by user
         EKFSlam(VehicleDynamic vehicleDynamic, ObjectDynamic objectDynamic, InitialEstFunc initialEstFunc,
                 InitialCovFunc initialCovFunc, typename VehicleDynamic::X initialEst = VehicleDynamic::X::Zero(),
                 typename VehicleDynamic::P initialCov = VehicleDynamic::P::Identity());
 
-        void update(typename VehicleDynamic::Z z_v, Measurements measurements);
+        void update(typename VehicleDynamic::Z vehicleMeasurement, ObjectMeasurements objectMeasurements);
 
         auto getVehicle() const -> typename VehicleDynamic::X;
 
         auto getObject(std::size_t id) const -> typename ObjectDynamic::X;
 
-        auto getNumberOfObjects() const -> std::size_t;
+        [[nodiscard]] auto getNumberOfObjects() const -> std::size_t;
 
       private:
-        auto predict(X x, P p) const -> std::pair<X, P>;
+        [[nodiscard]] auto predict(X x, P p) const -> std::pair<X, P>;
 
-        auto measure(X x, P p) const -> std::pair<Z, S>;
+        [[nodiscard]] auto measure(X x, P p) const -> std::pair<Z, S>;
 
-        auto slam(X x, P p, typename VehicleDynamic::Z vehicleMeas, Measurements measurements) const -> std::pair<X, P>;
+        auto slam(X x, P p, typename VehicleDynamic::Z vehicleMeas, ObjectMeasurements measurements) const
+                -> std::pair<X, P>;
 
-        auto dataAssociation(Z z, S s, Measurements measurements) const -> std::map<std::size_t, std::size_t>;
+        auto addTracks(X x, P p, typename VehicleDynamic::Z vehicleMeas, ObjectMeasurements measurements) const
+                -> std::pair<X, P>;
+
+        auto separateTracksNotMeasured(X x, P p, ObjectMeasurements objectMeasurements) const
+                -> std::tuple<X, P, TrackList>;
+
+        auto dataAssociation(Z z, S s, ObjectMeasurements measurements) const -> std::map<std::size_t, std::size_t>;
 
         // Helper functions single objects <-> vector conversion
-        auto getJf(X x) const;
+        auto getdf(X x) const;
         auto getQ(X x) const;
-        auto getJH(X x) const;
+        auto getdh(X x) const;
         auto getR(X x) const;
         auto x_v(X x) const;
         auto numObjects(X x) const;
@@ -93,9 +104,12 @@ namespace ekf_slam {
     template<std::size_t VEHICLE_STATE_DIM, std::size_t VEHICLE_MEAS_DIM, std::size_t OBJECT_STATE_DIM,
              std::size_t OBJECT_MEAS_DIM, typename T>
     void EKFSlam<VEHICLE_STATE_DIM, VEHICLE_MEAS_DIM, OBJECT_STATE_DIM, OBJECT_MEAS_DIM, T>::update(
-            typename VehicleDynamic::Z z_v, Measurements measurements) {
+            typename VehicleDynamic::Z vehicleMeasurement, ObjectMeasurements objectMeasurements) {
+        // Predict all objects, independent of their visibility, this leads to an increase in covariance over time
         std::tie(lastX, lastP) = predict(lastX, lastP);
-        std::tie(lastX, lastP) = slam(lastX, lastP, z_v, measurements);
+
+        // The innovation step is combined with the track management
+        std::tie(lastX, lastP) = slam(lastX, lastP, vehicleMeasurement, objectMeasurements);
     }
 
     template<std::size_t VEHICLE_STATE_DIM, std::size_t VEHICLE_MEAS_DIM, std::size_t OBJECT_STATE_DIM,
@@ -104,14 +118,14 @@ namespace ekf_slam {
             -> std::pair<X, P> {
         // x_hat = f(x)
         x_v(x) = vehicleDynamic.f(x_v(x));
-        for (auto c = 0U; c<numObjects(x); ++c) {
+        for (auto c = 0U; c < numObjects(x); ++c) {
             x_o(x, c) = objectDynamic.f(x_o(x, c));
         }
 
-        // P_hat = J_F * P * J_F^T + Q
-        auto J_F = getJf(x);
-        auto Q = getQ(x);
-        p = J_F * p * J_F.transpose() + Q;
+        // P_hat = dF * P * dF^T + q
+        auto df = getdf(x);
+        auto q = getQ(x);
+        p = df * p * df.transpose() + q;
 
         return std::make_pair(x, p);
     }
@@ -121,33 +135,89 @@ namespace ekf_slam {
     auto EKFSlam<VEHICLE_STATE_DIM, VEHICLE_MEAS_DIM, OBJECT_STATE_DIM, OBJECT_MEAS_DIM, T>::measure(X x, P p) const
             -> std::pair<Z, S> {
         // z = h(x)
-        Eigen::VectorXd z = Eigen::VectorXd::Zero(VEHICLE_MEAS_DIM + numObjects(x) * OBJECT_MEAS_DIM);
+        Z z = Z::Zero(VEHICLE_MEAS_DIM + numObjects(x) * OBJECT_MEAS_DIM);
         z.block(0, 0, VEHICLE_MEAS_DIM, 1) = vehicleDynamic.h(x_v(x), EmptyType{});
         for (auto c = 0U; c < numObjects(x); ++c) {
             z.block(VEHICLE_MEAS_DIM + c * OBJECT_MEAS_DIM, 0, OBJECT_MEAS_DIM, 1) = objectDynamic.h(x_o(x, c), x_v(x));
         }
 
-        // S = J_H * P * J_H^T + R
-        auto J_H = getJH(x);
-        auto R = getR(x);
-        auto S = J_H * p * J_H.transpose() + R;
+        // s = dh * P * dh^T + r
+        auto dh = getdh(x);
+        auto r = getR(x);
+        auto s = dh * p * dh.transpose() + r;
 
-        return std::make_pair(z, S);
+        return std::make_pair(z, s);
     }
 
     template<std::size_t VEHICLE_STATE_DIM, std::size_t VEHICLE_MEAS_DIM, std::size_t OBJECT_STATE_DIM,
              std::size_t OBJECT_MEAS_DIM, typename T>
     auto EKFSlam<VEHICLE_STATE_DIM, VEHICLE_MEAS_DIM, OBJECT_STATE_DIM, OBJECT_MEAS_DIM, T>::slam(
-            X x, P p, typename VehicleDynamic::Z vehicleMeas, Measurements measurements) const -> std::pair<X, P> {
-        auto [z_hat, S] = measure(x, p);
+            X x, P p, typename VehicleDynamic::Z vehicleMeas, ObjectMeasurements measurements) const
+            -> std::pair<X, P> {
 
         // New Tracks
+        std::tie(x, p) = addTracks(x, p, vehicleMeas, measurements);
+
+        // Temporary remove tracks not visible
+        TrackList invisibleObjects;
+        std::tie(x, p, invisibleObjects) = separateTracksNotMeasured(x, p, measurements);
+
+        assert(numObjects(x) == measurements.size());
+
+        auto [z_hat, s] = measure(x, p);
+
+        // Data association
+        auto associationMap = dataAssociation(z_hat, s, measurements);
+
+        // Reorder z to match x
+        ObjectMeasurements reorderedMeasurements(measurements.size());
+        for (auto c = 0U; c < measurements.size(); ++c) {
+            reorderedMeasurements[c] = measurements[associationMap[c]];
+        }
+
+        // Build Z Vector
+        Eigen::VectorXd z(VEHICLE_MEAS_DIM + reorderedMeasurements.size() * OBJECT_MEAS_DIM);
+        z.block(0, 0, VEHICLE_MEAS_DIM, 1) = vehicleMeas;
+        for (auto c = 0U; c < reorderedMeasurements.size(); ++c) {
+            z.block(VEHICLE_MEAS_DIM + c * OBJECT_MEAS_DIM, 0, OBJECT_MEAS_DIM, 1) = reorderedMeasurements[c];
+        }
+
+        // Calculate Kalman Gain
+        Eigen::MatrixXd K = p * getdh(x).transpose() * s.inverse();
+
+        // Innovation
+        Eigen::VectorXd tildeZ = z - z_hat;
+        x = x + K * tildeZ;
+        p = p - K * s * K.transpose();
+
+        // Readd tracks
+        X completeX = X::Zero(x.size() + invisibleObjects.size() * OBJECT_STATE_DIM);
+        P completeP = P::Zero(p.rows() + invisibleObjects.size() * OBJECT_STATE_DIM,
+                              p.cols() + invisibleObjects.size() * OBJECT_STATE_DIM);
+        completeX.block(0, 0, x.size(), 1) = x;
+        completeP.block(0, 0, x.size(), x.size()) = p;
+        for (auto c = 0U; c < invisibleObjects.size(); ++c) {
+            auto offset = x.size() + c * OBJECT_STATE_DIM;
+            completeX.block(offset, 0, OBJECT_STATE_DIM, 1) = invisibleObjects[c].first;
+            completeP.block(offset, offset, OBJECT_STATE_DIM, OBJECT_STATE_DIM) = invisibleObjects[c].second;
+        }
+
+        return std::make_pair(completeX, completeP);
+    }
+
+    template<std::size_t VEHICLE_STATE_DIM, std::size_t VEHICLE_MEAS_DIM, std::size_t OBJECT_STATE_DIM,
+             std::size_t OBJECT_MEAS_DIM, typename T>
+    auto EKFSlam<VEHICLE_STATE_DIM, VEHICLE_MEAS_DIM, OBJECT_STATE_DIM, OBJECT_MEAS_DIM, T>::addTracks(
+            X x, P p, typename VehicleDynamic::Z vehicleMeas, ObjectMeasurements measurements) const
+            -> std::pair<X, P> {
+        auto [z_hat, s] = measure(x, p);
+
         for (const auto &z : measurements) {
             auto minMhd = std::numeric_limits<T>::max();
             for (auto c = 0U; c < numObjects(x); ++c) {
                 auto offset = VEHICLE_MEAS_DIM + c * OBJECT_MEAS_DIM;
                 auto z_track = z_hat.block(offset, 0, OBJECT_MEAS_DIM, 1);
-                auto cov = S.block(offset, offset, OBJECT_MEAS_DIM, OBJECT_MEAS_DIM); // @TODO check
+                auto cov = s.block(offset, offset, OBJECT_MEAS_DIM, OBJECT_MEAS_DIM);
                 auto z_tilde = z_track - z;
 
                 auto mhd2 = z_tilde.transpose() * cov.inverse() * z_tilde;
@@ -173,19 +243,28 @@ namespace ekf_slam {
 
                 x = newX;
                 p = newP;
-                std::tie(z_hat, S) = measure(x, p);
+                std::tie(z_hat, s) = measure(x, p);
             }
         }
 
-        // Temporary remove tracks not visible
+        return std::make_pair(x, p);
+    }
+
+    template<std::size_t VEHICLE_STATE_DIM, std::size_t VEHICLE_MEAS_DIM, std::size_t OBJECT_STATE_DIM,
+             std::size_t OBJECT_MEAS_DIM, typename T>
+    auto EKFSlam<VEHICLE_STATE_DIM, VEHICLE_MEAS_DIM, OBJECT_STATE_DIM, OBJECT_MEAS_DIM, T>::separateTracksNotMeasured(
+            EKFSlam::X x, EKFSlam::P p, ObjectMeasurements objectMeasurements) const -> std::tuple<X, P, TrackList> {
+
+        auto [z_hat, s] = measure(x, p);
+
         std::vector<std::pair<typename ObjectDynamic::X, typename ObjectDynamic::P>> invisibleObjects;
         for (auto c = 0U; c < numObjects(x); ++c) {
             auto minMhd = std::numeric_limits<T>::max();
 
-            for (const auto &z_o : measurements) {
+            for (const auto &z_o : objectMeasurements) {
                 auto offset = VEHICLE_MEAS_DIM + c * OBJECT_MEAS_DIM;
                 auto z_track = z_hat.block(offset, 0, OBJECT_MEAS_DIM, 1);
-                auto cov = S.block(offset, offset, OBJECT_MEAS_DIM, OBJECT_MEAS_DIM); // @TODO check
+                auto cov = s.block(offset, offset, OBJECT_MEAS_DIM, OBJECT_MEAS_DIM);
                 auto z_tilde = z_track - z_o;
 
                 auto mhd2 = z_tilde.transpose() * cov.inverse() * z_tilde;
@@ -216,58 +295,21 @@ namespace ekf_slam {
                 // Remove last track
                 x = x.block(0, 0, x.size() - OBJECT_STATE_DIM, 1);
                 p = p.block(0, 0, p.rows() - OBJECT_STATE_DIM, p.cols() - OBJECT_STATE_DIM);
-                std::tie(z_hat, S) = measure(x, p);
+                std::tie(z_hat, s) = measure(x, p);
 
-                // We eliminated this track, thus we now need to check the track at this index (the following track) again
+                // We eliminated this track, thus we now need to check the track at this index (the following track)
+                // again
                 c -= 1;
             }
         }
 
-        assert(numObjects(x) == measurements.size());
-
-        // Data association
-        auto associationMap = dataAssociation(z_hat, S, measurements);
-
-        // Reorder z to match x
-        Measurements reorderedMeasurements(measurements.size());
-        for (auto c = 0U; c < measurements.size(); ++c) {
-            reorderedMeasurements[c] = measurements[associationMap[c]];
-        }
-
-        // Build Z Vector
-        Eigen::VectorXd z(VEHICLE_MEAS_DIM + reorderedMeasurements.size() * OBJECT_MEAS_DIM);
-        z.block(0, 0, VEHICLE_MEAS_DIM, 1) = vehicleMeas;
-        for (auto c = 0U; c < reorderedMeasurements.size(); ++c) {
-            z.block(VEHICLE_MEAS_DIM + c * OBJECT_MEAS_DIM, 0, OBJECT_MEAS_DIM, 1) = reorderedMeasurements[c];
-        }
-
-        // Calculate Kalman Gain
-        Eigen::MatrixXd K = p * getJH(x).transpose() * S.inverse();
-
-        // Innovation
-        Eigen::VectorXd tildeZ = z - z_hat;
-        x = x + K * tildeZ;
-        p = p - K * S * K.transpose();
-
-        // Readd tracks
-        X completeX = X::Zero(x.size() + invisibleObjects.size() * OBJECT_STATE_DIM);
-        P completeP = P::Zero(p.rows() + invisibleObjects.size() * OBJECT_STATE_DIM,
-                              p.cols() + invisibleObjects.size() * OBJECT_STATE_DIM);
-        completeX.block(0, 0, x.size(), 1) = x;
-        completeP.block(0, 0, x.size(), x.size()) = p;
-        for (auto c = 0U; c < invisibleObjects.size(); ++c) {
-            auto offset = x.size() + c * OBJECT_STATE_DIM;
-            completeX.block(offset, 0, OBJECT_STATE_DIM, 1) = invisibleObjects[c].first;
-            completeP.block(offset, offset, OBJECT_STATE_DIM, OBJECT_STATE_DIM) = invisibleObjects[c].second;
-        }
-
-        return std::make_pair(completeX, completeP);
+        return std::make_tuple(x, p, invisibleObjects);
     }
 
     template<std::size_t VEHICLE_STATE_DIM, std::size_t VEHICLE_MEAS_DIM, std::size_t OBJECT_STATE_DIM,
              std::size_t OBJECT_MEAS_DIM, typename T>
     auto EKFSlam<VEHICLE_STATE_DIM, VEHICLE_MEAS_DIM, OBJECT_STATE_DIM, OBJECT_MEAS_DIM, T>::dataAssociation(
-            Z z_hat, S s, Measurements measurements) const -> std::map<std::size_t, std::size_t> {
+            Z z_hat, S s, ObjectMeasurements measurements) const -> std::map<std::size_t, std::size_t> {
         // i is track, j is measurement
         Eigen::MatrixXd associationMatrix{measurements.size(), measurements.size()};
         std::vector<T> prices(measurements.size());
@@ -276,7 +318,7 @@ namespace ekf_slam {
         // track index -> measurement index
         std::map<std::size_t, std::size_t> map;
 
-        const auto epsilon = 1.0 / (z_hat.size() + 1U);
+        const auto epsilon = 1 / (z_hat.size() + 1.);
 
         for (auto i = 0U; i < measurements.size(); ++i) {
             for (auto j = 0U; j < measurements.size(); ++j) {
@@ -358,7 +400,7 @@ namespace ekf_slam {
      */
     template<std::size_t VEHICLE_STATE_DIM, std::size_t VEHICLE_MEAS_DIM, std::size_t OBJECT_STATE_DIM,
              std::size_t OBJECT_MEAS_DIM, typename T>
-    auto EKFSlam<VEHICLE_STATE_DIM, VEHICLE_MEAS_DIM, OBJECT_STATE_DIM, OBJECT_MEAS_DIM, T>::getJf(X x) const {
+    auto EKFSlam<VEHICLE_STATE_DIM, VEHICLE_MEAS_DIM, OBJECT_STATE_DIM, OBJECT_MEAS_DIM, T>::getdf(X x) const {
         Eigen::MatrixXd J_F = Eigen::MatrixXd::Zero(x.size(), x.size());
 
         J_F.block(0, 0, VEHICLE_STATE_DIM, VEHICLE_STATE_DIM) = vehicleDynamic.j_f(x_v(x));
@@ -389,7 +431,7 @@ namespace ekf_slam {
 
     template<std::size_t VEHICLE_STATE_DIM, std::size_t VEHICLE_MEAS_DIM, std::size_t OBJECT_STATE_DIM,
              std::size_t OBJECT_MEAS_DIM, typename T>
-    auto EKFSlam<VEHICLE_STATE_DIM, VEHICLE_MEAS_DIM, OBJECT_STATE_DIM, OBJECT_MEAS_DIM, T>::getJH(X x) const {
+    auto EKFSlam<VEHICLE_STATE_DIM, VEHICLE_MEAS_DIM, OBJECT_STATE_DIM, OBJECT_MEAS_DIM, T>::getdh(X x) const {
         Eigen::MatrixXd J_H = Eigen::MatrixXd::Zero(VEHICLE_MEAS_DIM + numObjects(x) * OBJECT_MEAS_DIM, x.size());
         J_H.block(0, 0, VEHICLE_MEAS_DIM, VEHICLE_STATE_DIM) = vehicleDynamic.j_h(x_v(x), EmptyType{});
 
