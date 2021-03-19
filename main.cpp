@@ -9,7 +9,7 @@ int main() {
     feenableexcept(FE_INVALID | FE_OVERFLOW | FE_DIVBYZERO); // Floating point exceptions
 
     ekf_slam::VehicleParams vehicleParams{0.1, 0.1, 1000 , 1000};
-    ekf_slam::ObjectParams objectParams{1, 1};
+    ekf_slam::ObjectParams objectParams{0.1, 0.1};
     ekf_slam::Manager manager{vehicleParams, objectParams};
 
     for (std::size_t c=0; c<1000; ++c) {

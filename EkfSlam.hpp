@@ -239,10 +239,10 @@ namespace ekf_slam {
         }
 
         // Calculate Kalman Gain
-        auto K = p * getJH(x).transpose() * S.inverse();
+        Eigen::MatrixXd K = p * getJH(x).transpose() * S.inverse();
 
         // Innovation
-        auto tildeZ = z - z_hat;
+        Eigen::VectorXd tildeZ = z - z_hat;
         x = x + K * tildeZ;
         p = p - K * S * K.transpose();
 
