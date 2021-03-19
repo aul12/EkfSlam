@@ -217,6 +217,9 @@ namespace ekf_slam {
                 x = x.block(0, 0, x.size() - OBJECT_STATE_DIM, 1);
                 p = p.block(0, 0, p.rows() - OBJECT_STATE_DIM, p.cols() - OBJECT_STATE_DIM);
                 std::tie(z_hat, S) = measure(x, p);
+
+                // We eliminated this track, thus we now need to check the track at this index (the following track) again
+                c -= 1;
             }
         }
 
