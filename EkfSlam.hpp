@@ -69,7 +69,7 @@ namespace ekf_slam {
         ObjectDynamic objectDynamic;
         InitialEstFunc initialEstFunc;
         InitialCovFunc initialCovFunc;
-        T gate = 3;
+        T gate = 2;
 
         // Actual prediction
         X lastX;
@@ -104,7 +104,7 @@ namespace ekf_slam {
             -> std::pair<X, P> {
         // x_hat = f(x)
         x_v(x) = vehicleDynamic.f(x_v(x));
-        for (auto c = 0U; numObjects(x); ++c) {
+        for (auto c = 0U; c<numObjects(x); ++c) {
             x_o(x, c) = objectDynamic.f(x_o(x, c));
         }
 
@@ -123,9 +123,8 @@ namespace ekf_slam {
         // z = h(x)
         Eigen::VectorXd z = Eigen::VectorXd::Zero(VEHICLE_MEAS_DIM + numObjects(x) * OBJECT_MEAS_DIM);
         z.block(0, 0, VEHICLE_MEAS_DIM, 1) = vehicleDynamic.h(x_v(x), EmptyType{});
-        for (auto c = 0U; numObjects(x); ++c) {
-            z.block(VEHICLE_MEAS_DIM + c * OBJECT_MEAS_DIM, 0, OBJECT_MEAS_DIM, 1) =
-                    objectDynamic.h(x.block(VEHICLE_STATE_DIM + c * OBJECT_STATE_DIM, 0, OBJECT_STATE_DIM, 1), x_v(x));
+        for (auto c = 0U; c < numObjects(x); ++c) {
+            z.block(VEHICLE_MEAS_DIM + c * OBJECT_MEAS_DIM, 0, OBJECT_MEAS_DIM, 1) = objectDynamic.h(x_o(x, c), x_v(x));
         }
 
         // S = J_H * P * J_H^T + R
@@ -161,11 +160,12 @@ namespace ekf_slam {
             }
 
             if (minMhd > gate) {
-                auto initialEstimate = initialEstFunc(z, x);
-                auto initialCov = initialCovFunc(z, x, p) + vehicleDynamic.r_func();
+                auto initialEstimate = initialEstFunc(z, x_v(x));
+                auto initialCov = initialCovFunc(z, x_v(x), p.block<VEHICLE_STATE_DIM, VEHICLE_STATE_DIM>(0, 0)) +
+                                  vehicleDynamic.r_func();
 
-                Eigen::VectorXd newX = Eigen::VectorXd::Zero(x.size() + OBJECT_STATE_DIM);
-                Eigen::VectorXd newP = Eigen::MatrixXd::Zero(p.rows() + OBJECT_STATE_DIM, p.cols() + OBJECT_STATE_DIM);
+                X newX = X::Zero(x.size() + OBJECT_STATE_DIM);
+                P newP = P::Zero(p.rows() + OBJECT_STATE_DIM, p.cols() + OBJECT_STATE_DIM);
                 newX.block(0, 0, x.size(), 1) = x;
                 newX.block(x.size(), 0, OBJECT_STATE_DIM, 1) = initialEstimate;
                 newP.block(0, 0, x.size(), x.size()) = p;
@@ -173,6 +173,7 @@ namespace ekf_slam {
 
                 x = newX;
                 p = newP;
+                std::tie(z_hat, S) = measure(x, p);
             }
         }
 
@@ -214,13 +215,12 @@ namespace ekf_slam {
 
                 // Remove last track
                 x = x.block(0, 0, x.size() - OBJECT_STATE_DIM, 1);
-                p = p.block(0, 0, x.size() - OBJECT_STATE_DIM, x.size() - OBJECT_STATE_DIM);
+                p = p.block(0, 0, p.rows() - OBJECT_STATE_DIM, p.cols() - OBJECT_STATE_DIM);
+                std::tie(z_hat, S) = measure(x, p);
             }
         }
 
         assert(numObjects(x) == measurements.size());
-
-        std::tie(z_hat, S) = measure(x, p);
 
         // Data association
         auto associationMap = dataAssociation(z_hat, S, measurements);
@@ -329,6 +329,7 @@ namespace ekf_slam {
             }
             auto y_i = maxVal - secondVal;
             prices[iMax] += y_i + epsilon;
+            observationMapped[j] = true;
         }
 
         return map;
@@ -359,7 +360,7 @@ namespace ekf_slam {
 
         J_F.block(0, 0, VEHICLE_STATE_DIM, VEHICLE_STATE_DIM) = vehicleDynamic.j_f(x_v(x));
 
-        for (auto c = 0U; numObjects(x); ++c) {
+        for (auto c = 0U; c < numObjects(x); ++c) {
             auto offset = VEHICLE_STATE_DIM + c * OBJECT_STATE_DIM;
             J_F.block(offset, offset, OBJECT_STATE_DIM, OBJECT_STATE_DIM) = objectDynamic.j_f(x_o(x, c));
         }
@@ -375,7 +376,7 @@ namespace ekf_slam {
         Q.block<VEHICLE_STATE_DIM, VEHICLE_STATE_DIM>(0, 0, VEHICLE_STATE_DIM, VEHICLE_STATE_DIM) =
                 vehicleDynamic.q_func(x_v(x));
 
-        for (auto c = 0U; numObjects(x); ++c) {
+        for (auto c = 0U; c < numObjects(x); ++c) {
             auto offset = VEHICLE_STATE_DIM + c * OBJECT_STATE_DIM;
             Q.block(offset, offset, OBJECT_STATE_DIM, OBJECT_STATE_DIM) = objectDynamic.q_func(x_o(x, c));
         }
@@ -389,11 +390,9 @@ namespace ekf_slam {
         Eigen::MatrixXd J_H = Eigen::MatrixXd::Zero(VEHICLE_MEAS_DIM + numObjects(x) * OBJECT_MEAS_DIM, x.size());
         J_H.block(0, 0, VEHICLE_MEAS_DIM, VEHICLE_STATE_DIM) = vehicleDynamic.j_h(x_v(x), EmptyType{});
 
-        for (auto c = 0U; numObjects(x); ++c) {
+        for (auto c = 0U; c < numObjects(x); ++c) {
             J_H.block(VEHICLE_MEAS_DIM + c * OBJECT_MEAS_DIM, VEHICLE_STATE_DIM + c * OBJECT_STATE_DIM, OBJECT_MEAS_DIM,
-                      OBJECT_STATE_DIM) =
-                    objectDynamic.j_h(x.block(VEHICLE_STATE_DIM + c * OBJECT_STATE_DIM, 0, OBJECT_STATE_DIM, 1),
-                                      x_v(x));
+                      OBJECT_STATE_DIM) = objectDynamic.j_h(x_o(x, c), x_v(x));
         }
         return J_H;
     }
@@ -405,7 +404,7 @@ namespace ekf_slam {
                                                   VEHICLE_MEAS_DIM + numObjects(x) * OBJECT_MEAS_DIM);
         R.block(0, 0, VEHICLE_MEAS_DIM, VEHICLE_MEAS_DIM) = vehicleDynamic.r_func();
 
-        for (auto c = 0U; numObjects(x); ++c) {
+        for (auto c = 0U; c < numObjects(x); ++c) {
             R.block(VEHICLE_MEAS_DIM + c * OBJECT_MEAS_DIM, VEHICLE_MEAS_DIM + c * OBJECT_MEAS_DIM, OBJECT_MEAS_DIM,
                     OBJECT_MEAS_DIM) = objectDynamic.r_func();
         }

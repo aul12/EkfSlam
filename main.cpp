@@ -9,13 +9,13 @@ int main() {
     feenableexcept(FE_INVALID | FE_OVERFLOW | FE_DIVBYZERO); // Floating point exceptions
     auto dt = 0.1;
 
-    ekf_slam::VehicleParams vehicleParams{0.1, 0.1, 1000 , 1000};
-    ekf_slam::ObjectParams objectParams{0.1, 0.1};
+    ekf_slam::VehicleParams vehicleParams{1, 1, 1, 1};
+    ekf_slam::ObjectParams objectParams{1, 1};
     ekf_slam::Manager manager{vehicleParams, objectParams};
 
     std::vector<ekf_slam::Manager::ObjectState> cones;
     cones.emplace_back(1, 1);
-    cones.emplace_back(2, 1);
+    cones.emplace_back(5, 5);
     ekf_slam::Manager::VehicleState vehicleState{0, 0, 0, 0, 0};
     auto f = ekf_slam::single_track_model::make<double>(dt, 0, 0, 0, 0).f;
     auto coneH = ekf_slam::constant_position_model::make<double>(0, 0).h;
