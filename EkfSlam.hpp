@@ -165,7 +165,7 @@ namespace ekf_slam {
                 auto initialCov = initialCovFunc(z, x, p) + vehicleDynamic.r_func();
 
                 Eigen::VectorXd newX = Eigen::VectorXd::Zero(x.size() + OBJECT_STATE_DIM);
-                Eigen::VectorXd newP = Eigen::MatrixXd::Zero(x.size() + OBJECT_STATE_DIM, x.size() + OBJECT_STATE_DIM);
+                Eigen::VectorXd newP = Eigen::MatrixXd::Zero(p.rows() + OBJECT_STATE_DIM, p.cols() + OBJECT_STATE_DIM);
                 newX.block(0, 0, x.size(), 1) = x;
                 newX.block(x.size(), 0, OBJECT_STATE_DIM, 1) = initialEstimate;
                 newP.block(0, 0, x.size(), x.size()) = p;
@@ -249,7 +249,7 @@ namespace ekf_slam {
         // Readd tracks
         X completeX = X::Zero(x.size() + invisibleObjects.size() * OBJECT_STATE_DIM);
         P completeP = P::Zero(p.rows() + invisibleObjects.size() * OBJECT_STATE_DIM,
-                                 p.cols() + invisibleObjects.size() * OBJECT_STATE_DIM);
+                              p.cols() + invisibleObjects.size() * OBJECT_STATE_DIM);
         completeX.block(0, 0, x.size(), 1) = x;
         completeP.block(0, 0, x.size(), x.size()) = p;
         for (auto c = 0U; c < invisibleObjects.size(); ++c) {
@@ -372,7 +372,8 @@ namespace ekf_slam {
     auto EKFSlam<VEHICLE_STATE_DIM, VEHICLE_MEAS_DIM, OBJECT_STATE_DIM, OBJECT_MEAS_DIM, T>::getQ(X x) const {
         Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(x.size(), x.size());
 
-        Q.block<VEHICLE_STATE_DIM, VEHICLE_STATE_DIM>(0, 0, VEHICLE_STATE_DIM, VEHICLE_STATE_DIM) = vehicleDynamic.q_func(x_v(x));
+        Q.block<VEHICLE_STATE_DIM, VEHICLE_STATE_DIM>(0, 0, VEHICLE_STATE_DIM, VEHICLE_STATE_DIM) =
+                vehicleDynamic.q_func(x_v(x));
 
         for (auto c = 0U; numObjects(x); ++c) {
             auto offset = VEHICLE_STATE_DIM + c * OBJECT_STATE_DIM;
@@ -401,7 +402,7 @@ namespace ekf_slam {
              std::size_t OBJECT_MEAS_DIM, typename T>
     auto EKFSlam<VEHICLE_STATE_DIM, VEHICLE_MEAS_DIM, OBJECT_STATE_DIM, OBJECT_MEAS_DIM, T>::getR(X x) const {
         Eigen::MatrixXd R = Eigen::MatrixXd::Zero(VEHICLE_MEAS_DIM + numObjects(x) * OBJECT_MEAS_DIM,
-                                       VEHICLE_MEAS_DIM + numObjects(x) * OBJECT_MEAS_DIM);
+                                                  VEHICLE_MEAS_DIM + numObjects(x) * OBJECT_MEAS_DIM);
         R.block(0, 0, VEHICLE_MEAS_DIM, VEHICLE_MEAS_DIM) = vehicleDynamic.r_func();
 
         for (auto c = 0U; numObjects(x); ++c) {

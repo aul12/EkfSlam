@@ -57,7 +57,7 @@ namespace ekf_slam::single_track_model {
 
     template<typename T>
     auto make(const T &dt, T sigmaA2, T sigmaDDPsi2, T sigmaV2, T sigmaDPsi2) {
-        auto f = [&dt](auto x) {
+        auto f = [&dt](auto x) -> typename State<T>::Vec {
             State<T> state{x};
             // clang-format off
             State<T> newState{state.xPos + std::cos(state.psi) * state.v * dt,
@@ -69,7 +69,7 @@ namespace ekf_slam::single_track_model {
             return static_cast<typename State<T>::Vec>(newState);
         };
 
-        auto J_F = [&dt](auto x) {
+        auto J_F = [&dt](auto x) -> typename State<T>::Mat {
             State<T> state{x};
             typename State<T>::Mat j_f;
             // clang-format off
@@ -83,7 +83,7 @@ namespace ekf_slam::single_track_model {
             return j_f;
         };
 
-        auto Q_func = [&dt, sigmaA2, sigmaDDPsi2](auto x) {
+        auto Q_func = [&dt, sigmaA2, sigmaDDPsi2](auto x) -> typename State<T>::Mat {
             State<T> state{x};
             Eigen::Vector3d GammaA;
             // clang-format off
@@ -107,13 +107,13 @@ namespace ekf_slam::single_track_model {
             return Q;
         };
 
-        auto h = [](auto x, auto /*empty*/) {
+        auto h = [](auto x, auto /*empty*/) -> typename Meas<T>::Vec {
             State<T> state{x};
             Meas<T> meas{state.v, state.psi};
             return static_cast<typename Meas<T>::Vec>(meas);
         };
 
-        auto J_H = [](auto x, auto /*empty*/) {
+        auto J_H = [](auto x, auto /*empty*/) -> Eigen::Matrix<T, Meas<T>::DIM, State<T>::DIM> {
             Eigen::Matrix<T, Meas<T>::DIM, State<T>::DIM> c = Eigen::Matrix<T, Meas<T>::DIM, State<T>::DIM>::Zero();
             c <<
                     // clang-format off
@@ -123,7 +123,7 @@ namespace ekf_slam::single_track_model {
             return c;
         };
 
-        auto R_func = [sigmaV2, sigmaDPsi2]() {
+        auto R_func = [sigmaV2, sigmaDPsi2]() -> typename Meas<T>::Mat {
             Eigen::Matrix<T, Meas<T>::DIM, Meas<T>::DIM> R = Eigen::Matrix<T, Meas<T>::DIM, Meas<T>::DIM>::Zero();
             R <<
                     // clang-format off
