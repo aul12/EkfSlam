@@ -100,7 +100,7 @@ namespace ekf_slam::single_track_model {
             // clang-format on
             auto Q_a = GammaA * GammaA.transpose() * sigmaA2;
             auto Q_DDPsi = GammaDDPsi * GammaDDPsi.transpose() * sigmaDDPsi2;
-            Eigen::Matrix<T, 5, 5> Q;
+            Eigen::Matrix<T, 5, 5> Q = Eigen::Matrix<T, 5, 5>::Zero();
             Q.block(0, 0, 3, 3) = Q_a;
             Q.block(3, 3, 2, 2) = Q_DDPsi;
 

@@ -55,7 +55,6 @@ namespace ekf_slam::constant_position_model {
         };
 
         auto J_H = [](auto x_obj, auto x_vehicle) -> typename Meas<T>::Mat {
-            State obj{x_obj};
             single_track_model::State vehicle{x_vehicle};
             typename Meas<T>::Mat j_h{};
             // clang-format off
@@ -85,8 +84,7 @@ namespace ekf_slam::constant_position_model {
     template<typename T>
     auto getInitialCovariance(typename Meas<T>::Vec z, typename single_track_model::State<T>::Vec xVehicle,
                               typename single_track_model::State<T>::Mat pVehicle) -> typename State<T>::Mat {
-        single_track_model::State vehicle{xVehicle};
-        return typename State<T>::Mat{Eigen::Rotation2D<T>(vehicle.psi) * pVehicle.block(0, 0, 2, 2)};
+        return pVehicle.block(0, 0, 2, 2);
     }
 
 } // namespace ekf_slam::constant_position_model
