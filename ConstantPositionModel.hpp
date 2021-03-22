@@ -37,13 +37,14 @@ namespace ekf_slam::constant_position_model {
 
     template<typename T>
     auto make(T q, T r) {
-        auto f = [](auto x) -> typename State<T>::Vec { return x; };                       // State remains the same
-        auto J_F = [](auto x) -> typename State<T>::Mat { return State<T>::Mat::Zero(); }; // Jacobian is zero
-        auto Q_func = [q](auto x) ->
+        ObjectDynamicContainer<State<T>::DIM, Meas<T>::DIM, typename single_track_model::State<T>::Vec, T> objectDynamicContainer;
+        objectDynamicContainer.f = [](auto x) -> typename State<T>::Vec { return x; };                       // State remains the same
+        objectDynamicContainer.j_f = [](auto x) -> typename State<T>::Mat { return State<T>::Mat::Zero(); }; // Jacobian is zero
+        objectDynamicContainer.q_func = [q](auto x) ->
                 typename State<T>::Mat { return State<T>::Mat::Identity() * q; }; // Equal noise on both coordinates
 
         // Conversion to local coordinates
-        auto h = [](auto x_obj, auto x_vehicle) -> typename Meas<T>::Vec {
+        objectDynamicContainer.h = [](auto x_obj, auto x_vehicle) -> typename Meas<T>::Vec {
             State obj{x_obj};
             single_track_model::State vehicle{x_vehicle};
             auto dx = obj.xPos - vehicle.xPos;
@@ -54,7 +55,7 @@ namespace ekf_slam::constant_position_model {
             return static_cast<typename Meas<T>::Vec>(meas);
         };
 
-        auto J_H = [](auto x_obj, auto x_vehicle) -> typename Meas<T>::Mat {
+        objectDynamicContainer.j_h = [](auto x_obj, auto x_vehicle) -> typename Meas<T>::Mat {
             single_track_model::State vehicle{x_vehicle};
             typename Meas<T>::Mat j_h{};
             // clang-format off
@@ -64,10 +65,11 @@ namespace ekf_slam::constant_position_model {
             return j_h;
         };
 
-        auto R_func = [r]() -> typename Meas<T>::Mat { return Meas<T>::Mat::Identity() * r; }; // Equal measurement noise on both coordinates
+        objectDynamicContainer.r_func = [r]() -> typename Meas<T>::Mat {
+            return Meas<T>::Mat::Identity() * r;
+        }; // Equal measurement noise on both coordinates
 
-        return Dynamic<State<T>::DIM, Meas<T>::DIM, typename single_track_model::State<T>::Vec, T>{f, J_F, Q_func,
-                                                                                                   h, J_H, R_func};
+        return objectDynamicContainer;
     }
 
     template<typename T>
