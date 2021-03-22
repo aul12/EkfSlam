@@ -8,6 +8,7 @@
 #define EKFSLAM_SINGLETRACKMODEL_HPP
 
 #include "Dynamic.hpp"
+#include "Util.hpp"
 
 namespace ekf_slam::single_track_model {
     template<typename T>
@@ -100,6 +101,8 @@ namespace ekf_slam::single_track_model {
             // clang-format on
             auto Q_a = GammaA * GammaA.transpose() * sigmaA2;
             auto Q_DDPsi = GammaDDPsi * GammaDDPsi.transpose() * sigmaDDPsi2;
+            ASSERT_COV(Q_a);
+            ASSERT_COV(Q_DDPsi);
             Eigen::Matrix<T, 5, 5> Q = Eigen::Matrix<T, 5, 5>::Zero();
             Q.block(0, 0, 3, 3) = Q_a;
             Q.block(3, 3, 2, 2) = Q_DDPsi;

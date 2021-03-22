@@ -448,7 +448,6 @@ namespace ekf_slam {
             ASSERT_COV(Q);
         }
 
-
         return Q;
     }
 
