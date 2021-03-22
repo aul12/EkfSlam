@@ -330,11 +330,6 @@ namespace ekf_slam {
             Z z_hat, S s, ObjectMeasurements measurements) const -> std::map<std::size_t, std::size_t> {
         // i is track, j is measurement
         Eigen::MatrixXd associationMatrix{measurements.size(), measurements.size()};
-        std::vector<T> prices(measurements.size());
-        std::vector<bool> observationMapped(measurements.size());
-
-        // track index -> measurement index
-        std::map<std::size_t, std::size_t> map;
 
         const auto epsilon = 1 / (z_hat.size() + 1.);
 
@@ -356,7 +351,15 @@ namespace ekf_slam {
         }
 
         // Auction algorithm
+        std::vector<T> trackPrices(measurements.size());
+        std::vector<bool> observationMapped(measurements.size());
+
+        // track index -> measurement index
+        std::map<std::size_t, std::size_t> map;
+
+        auto count = 0U;
         while (true) {
+            ++count;
             auto allMapped = std::reduce(observationMapped.cbegin(), observationMapped.cend(), true,
                                          [](auto a, auto b) { return a and b; });
             if (allMapped) {
@@ -371,10 +374,10 @@ namespace ekf_slam {
             }
 
             auto iMax = 0;
-            auto maxVal = std::numeric_limits<T>::min();
+            auto maxVal = std::numeric_limits<T>::lowest();
 
             for (auto i = 0U; i < measurements.size(); ++i) {
-                auto val = associationMatrix(i, j) - prices[i];
+                auto val = associationMatrix(i, j) - trackPrices[i];
                 if (val > maxVal) {
                     iMax = i;
                     maxVal = val;
@@ -387,17 +390,17 @@ namespace ekf_slam {
             map[iMax] = j;
 
             auto secondIMax = 0;
-            auto secondVal = std::numeric_limits<T>::min();
+            auto secondVal = std::numeric_limits<T>::lowest();
 
             for (auto i = 0U; i < measurements.size(); ++i) {
-                auto val = associationMatrix(i, j) - prices[i];
+                auto val = associationMatrix(i, j) - trackPrices[i];
                 if (val > secondVal and secondIMax != iMax) {
                     secondIMax = i;
                     secondVal = val;
                 }
             }
             auto y_i = maxVal - secondVal;
-            prices[iMax] += y_i + epsilon;
+            trackPrices[iMax] += y_i + epsilon;
             observationMapped[j] = true;
         }
 
