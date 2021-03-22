@@ -51,7 +51,7 @@ namespace ekf_slam {
         R_func r_func;
     };
 
-    template<std::size_t STATE_DIM, std::size_t MEAS_DIM, typename VehicleState, typename T>
+    template<std::size_t STATE_DIM, std::size_t MEAS_DIM, std::size_t VEHICLE_STATE_DIM, typename T>
     struct ObjectDynamicContainer : public DynamicContainer<STATE_DIM, MEAS_DIM, T> {
         using Dynamic = DynamicContainer<STATE_DIM, MEAS_DIM, T>;
         using typename Dynamic::C;
@@ -60,14 +60,17 @@ namespace ekf_slam {
         using typename Dynamic::R;
         using typename Dynamic::X;
         using typename Dynamic::Z;
+        using CVehicle = Eigen::Matrix<T, MEAS_DIM, VEHICLE_STATE_DIM>;
+        using XVehicle = Eigen::Matrix<T, VEHICLE_STATE_DIM, 1>;
 
         using F_func = std::function<auto(X)->X>;
         using dF_func = std::function<auto(X)->P>;
 
         using Q_func = std::function<auto(X)->Q>;
 
-        using H_func = std::function<auto(X, VehicleState)->Z>;
-        using dH_func = std::function<auto(X, VehicleState)->C>;
+        using H_func = std::function<auto(X, XVehicle)->Z>;
+        using dH_Object_func = std::function<auto(X, XVehicle)->C>;
+        using dH_Vehicle_func = std::function<auto(X, XVehicle)->CVehicle>;
 
         using R_func = std::function<auto()->R>;
 
@@ -76,7 +79,8 @@ namespace ekf_slam {
         Q_func q_func;
 
         H_func h;
-        dH_func j_h; // TODO block vehicle column, object row
+        dH_Object_func j_h_object;
+        dH_Vehicle_func j_h_vehicle;
         R_func r_func;
     };
 

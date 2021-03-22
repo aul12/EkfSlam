@@ -22,7 +22,7 @@ namespace ekf_slam {
       public:
         // Type declarations
         using VehicleDynamic = VehicleDynamicContainer<VEHICLE_STATE_DIM, VEHICLE_MEAS_DIM, T>;
-        using ObjectDynamic = ObjectDynamicContainer<OBJECT_STATE_DIM, OBJECT_MEAS_DIM, typename VehicleDynamic::X, T>;
+        using ObjectDynamic = ObjectDynamicContainer<OBJECT_STATE_DIM, OBJECT_MEAS_DIM, VEHICLE_STATE_DIM, T>;
 
         using X = Eigen::Matrix<T, Eigen::Dynamic, 1>;
         using P = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>;
@@ -116,7 +116,6 @@ namespace ekf_slam {
         std::tie(lastX, lastP) = slam(lastX, lastP, vehicleMeasurement, objectMeasurements);
 
         // Just some plausibility checks
-        std::cout << "\n\n" << lastP << "\n\n" << std::endl;
         ASSERT_COV(lastP);
     }
 
@@ -468,7 +467,9 @@ namespace ekf_slam {
 
         for (auto c = 0U; c < numObjects(x); ++c) {
             J_H.block(VEHICLE_MEAS_DIM + c * OBJECT_MEAS_DIM, VEHICLE_STATE_DIM + c * OBJECT_STATE_DIM, OBJECT_MEAS_DIM,
-                      OBJECT_STATE_DIM) = objectDynamic.j_h(x_o(x, c), x_v(x));
+                      OBJECT_STATE_DIM) = objectDynamic.j_h_object(x_o(x, c), x_v(x));
+            J_H.block(0, VEHICLE_MEAS_DIM + c * OBJECT_MEAS_DIM, OBJECT_MEAS_DIM, VEHICLE_STATE_DIM) =
+                    objectDynamic.j_h_vehicle(x_o(x, c), x_v(x));
         }
         return J_H;
     }

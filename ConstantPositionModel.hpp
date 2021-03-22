@@ -37,9 +37,11 @@ namespace ekf_slam::constant_position_model {
 
     template<typename T>
     auto make(T q, T r) {
-        ObjectDynamicContainer<State<T>::DIM, Meas<T>::DIM, typename single_track_model::State<T>::Vec, T> objectDynamicContainer;
-        objectDynamicContainer.f = [](auto x) -> typename State<T>::Vec { return x; };                       // State remains the same
-        objectDynamicContainer.j_f = [](auto x) -> typename State<T>::Mat { return State<T>::Mat::Zero(); }; // Jacobian is zero
+        ObjectDynamicContainer<State<T>::DIM, Meas<T>::DIM, single_track_model::State<T>::DIM, T>
+                objectDynamicContainer;
+        objectDynamicContainer.f = [](auto x) -> typename State<T>::Vec { return x; }; // State remains the same
+        objectDynamicContainer.j_f = [](auto x) ->
+                typename State<T>::Mat { return State<T>::Mat::Zero(); }; // Jacobian is zero
         objectDynamicContainer.q_func = [q](auto x) ->
                 typename State<T>::Mat { return State<T>::Mat::Identity() * q; }; // Equal noise on both coordinates
 
@@ -55,12 +57,25 @@ namespace ekf_slam::constant_position_model {
             return static_cast<typename Meas<T>::Vec>(meas);
         };
 
-        objectDynamicContainer.j_h = [](auto x_obj, auto x_vehicle) -> typename Meas<T>::Mat {
+        objectDynamicContainer.j_h_object = [](auto x_obj, auto x_vehicle) -> typename Meas<T>::Mat {
             single_track_model::State vehicle{x_vehicle};
             typename Meas<T>::Mat j_h{};
             // clang-format off
             j_h << std::cos(-vehicle.psi), -std::sin(-vehicle.psi),
                    std::sin(-vehicle.psi), std::cos(vehicle.psi);
+            // clang-format on
+            return j_h;
+        };
+
+        objectDynamicContainer.j_h_vehicle = [](auto x_obj, auto x_vehicle) {
+            State obj{x_obj};
+            single_track_model::State vehicle{x_vehicle};
+            auto dx = obj.xPos - vehicle.xPos;
+            auto dy = obj.yPos - vehicle.yPos;
+            Eigen::Matrix<T, Meas<T>::DIM, single_track_model::State<T>::DIM> j_h;
+            // clang-format off
+            j_h << std::cos(-vehicle.psi) * (-1), -std::sin(-vehicle.psi) * (-1), 0, -std::sin(-vehicle.psi) * (-1) * dx - std::cos(-vehicle.psi) * dy * (-1), 0,
+                   std::sin(-vehicle.psi) * (-1), std::cos(-vehicle.psi) * (-1),  0, std::cos(-vehicle.psi) * (-1) * dx + (-std::sin(-vehicle.psi)) * dy * (-1), 0;
             // clang-format on
             return j_h;
         };
