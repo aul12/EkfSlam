@@ -13,6 +13,7 @@
 #include <numeric>
 
 #include "Dynamic.hpp"
+#include "Util.hpp"
 
 namespace ekf_slam {
     template<std::size_t VEHICLE_STATE_DIM, std::size_t VEHICLE_MEAS_DIM, std::size_t OBJECT_STATE_DIM,
@@ -113,8 +114,7 @@ namespace ekf_slam {
 
         // Just some plausibility checks
         std::cout << "\n\n" << lastP << "\n\n" << std::endl;
-        assert(lastP.determinant() > 0);
-        assert((lastP-lastP.transpose()).lpNorm<Eigen::Infinity>() < 0.1);
+        ASSERT_COV(lastP);
     }
 
     template<std::size_t VEHICLE_STATE_DIM, std::size_t VEHICLE_MEAS_DIM, std::size_t OBJECT_STATE_DIM,
@@ -131,6 +131,7 @@ namespace ekf_slam {
         auto df = getdf(x);
         auto q = getQ(x);
         p = df * p * df.transpose() + q;
+        ASSERT_COV(p);
 
         return std::make_pair(x, p);
     }
@@ -149,7 +150,8 @@ namespace ekf_slam {
         // s = dh * P * dh^T + r
         auto dh = getdh(x);
         auto r = getR(x);
-        auto s = dh * p * dh.transpose() + r;
+        S s = dh * p * dh.transpose() + r;
+        ASSERT_COV(s);
 
         return std::make_pair(z, s);
     }
@@ -194,6 +196,7 @@ namespace ekf_slam {
         Eigen::VectorXd tildeZ = z - z_hat;
         x = x + K * tildeZ;
         p = p - K * s * K.transpose();
+        ASSERT_COV(p);
 
         // Readd tracks
         X completeX = X::Zero(x.size() + invisibleObjects.size() * OBJECT_STATE_DIM);
@@ -206,6 +209,8 @@ namespace ekf_slam {
             completeX.block(offset, 0, OBJECT_STATE_DIM, 1) = invisibleObjects[c].first;
             completeP.block(offset, offset, OBJECT_STATE_DIM, OBJECT_STATE_DIM) = invisibleObjects[c].second;
         }
+
+        ASSERT_COV(completeP);
 
         return std::make_pair(completeX, completeP);
     }
@@ -222,8 +227,10 @@ namespace ekf_slam {
             for (auto c = 0U; c < numObjects(x); ++c) {
                 auto offset = VEHICLE_MEAS_DIM + c * OBJECT_MEAS_DIM;
                 auto z_track = z_hat.block(offset, 0, OBJECT_MEAS_DIM, 1);
-                auto cov = s.block(offset, offset, OBJECT_MEAS_DIM, OBJECT_MEAS_DIM);
+                S cov = s.block(offset, offset, OBJECT_MEAS_DIM, OBJECT_MEAS_DIM);
                 auto z_tilde = z_track - z;
+
+                ASSERT_COV(cov);
 
                 auto mhd2 = z_tilde.transpose() * cov.inverse() * z_tilde;
                 assert(mhd2.rows() == 1 and mhd2.cols() == 1);
@@ -236,8 +243,10 @@ namespace ekf_slam {
 
             if (minMhd > gate) {
                 auto initialEstimate = initialEstFunc(z, x_v(x));
-                auto initialCov = initialCovFunc(z, x_v(x), p.block<VEHICLE_STATE_DIM, VEHICLE_STATE_DIM>(0, 0)) +
+                P initialCov = initialCovFunc(z, x_v(x), p.block<VEHICLE_STATE_DIM, VEHICLE_STATE_DIM>(0, 0)) +
                                   vehicleDynamic.r_func();
+
+                ASSERT_COV(initialCov);
 
                 X newX = X::Zero(x.size() + OBJECT_STATE_DIM);
                 P newP = P::Zero(p.rows() + OBJECT_STATE_DIM, p.cols() + OBJECT_STATE_DIM);
@@ -248,6 +257,7 @@ namespace ekf_slam {
 
                 x = newX;
                 p = newP;
+                ASSERT_COV(p);
                 std::tie(z_hat, s) = measure(x, p);
             }
         }
@@ -286,6 +296,8 @@ namespace ekf_slam {
                 auto x_track = x.block(offset, 0, OBJECT_STATE_DIM, 1);
                 auto p_track = p.block(offset, offset, OBJECT_STATE_DIM, OBJECT_STATE_DIM);
 
+                ASSERT_COV(p_track);
+
                 invisibleObjects.emplace_back(x_track, p_track);
 
                 // Swap with last track
@@ -300,6 +312,7 @@ namespace ekf_slam {
                 // Remove last track
                 x = x.block(0, 0, x.size() - OBJECT_STATE_DIM, 1);
                 p = p.block(0, 0, p.rows() - OBJECT_STATE_DIM, p.cols() - OBJECT_STATE_DIM);
+                ASSERT_COV(p);
                 std::tie(z_hat, s) = measure(x, p);
 
                 // We eliminated this track, thus we now need to check the track at this index (the following track)
@@ -331,6 +344,8 @@ namespace ekf_slam {
                 auto z_track = z_hat.block(offset, 0, OBJECT_MEAS_DIM, 1);
                 auto cov = s.block(offset, offset, OBJECT_MEAS_DIM, OBJECT_MEAS_DIM);
                 auto z_tilde = z_track - measurements[j];
+
+                ASSERT_COV(cov);
 
                 auto mhd2 = z_tilde.transpose() * cov.inverse() * z_tilde;
 
@@ -425,11 +440,14 @@ namespace ekf_slam {
 
         Q.block(0, 0, VEHICLE_STATE_DIM, VEHICLE_STATE_DIM) =
                 vehicleDynamic.q_func(x_v(x));
+        ASSERT_COV(Q);
 
         for (auto c = 0U; c < numObjects(x); ++c) {
             auto offset = VEHICLE_STATE_DIM + c * OBJECT_STATE_DIM;
             Q.block(offset, offset, OBJECT_STATE_DIM, OBJECT_STATE_DIM) = objectDynamic.q_func(x_o(x, c));
+            ASSERT_COV(Q);
         }
+
 
         return Q;
     }
@@ -458,6 +476,9 @@ namespace ekf_slam {
             R.block(VEHICLE_MEAS_DIM + c * OBJECT_MEAS_DIM, VEHICLE_MEAS_DIM + c * OBJECT_MEAS_DIM, OBJECT_MEAS_DIM,
                     OBJECT_MEAS_DIM) = objectDynamic.r_func();
         }
+
+        ASSERT_COV(R);
+
         return R;
     }
 
