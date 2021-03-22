@@ -310,8 +310,8 @@ namespace ekf_slam {
                 }
 
                 // Remove last track
-                x = x.block(0, 0, x.size() - OBJECT_STATE_DIM, 1);
-                p = p.block(0, 0, p.rows() - OBJECT_STATE_DIM, p.cols() - OBJECT_STATE_DIM);
+                x.conservativeResize(x.size()-OBJECT_STATE_DIM);
+                p.conservativeResize(p.rows() - OBJECT_STATE_DIM, p.cols() - OBJECT_STATE_DIM);
                 ASSERT_COV(p);
                 std::tie(z_hat, s) = measure(x, p);
 
