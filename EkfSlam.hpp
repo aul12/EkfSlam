@@ -355,6 +355,7 @@ namespace ekf_slam {
             }
         }
 
+        // Auction algorithm
         while (true) {
             auto allMapped = std::reduce(observationMapped.cbegin(), observationMapped.cend(), true,
                                          [](auto a, auto b) { return a and b; });
@@ -380,6 +381,9 @@ namespace ekf_slam {
                 }
             }
 
+            if (map.find(iMax) != map.cend()) {
+                observationMapped[map[iMax]] = false;
+            }
             map[iMax] = j;
 
             auto secondIMax = 0;
