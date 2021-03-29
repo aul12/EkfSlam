@@ -224,6 +224,11 @@ namespace ekf_slam {
             -> std::pair<X, P> {
         auto [z_hat, s] = measure(x, p);
 
+        // We do not update in place as this can result in missing cones if a new cone can be matched to two
+        // measurements
+        X updatedX = x;
+        P updatedP = p;
+
         for (const auto &z : measurements) {
             auto minMhd = std::numeric_limits<T>::max();
             for (auto c = 0U; c < numObjects(x); ++c) {
@@ -250,21 +255,21 @@ namespace ekf_slam {
 
                 ASSERT_COV(initialCov);
 
-                X newX = X::Zero(x.size() + OBJECT_STATE_DIM);
-                P newP = P::Zero(p.rows() + OBJECT_STATE_DIM, p.cols() + OBJECT_STATE_DIM);
-                newX.block(0, 0, x.size(), 1) = x;
-                newX.block(x.size(), 0, OBJECT_STATE_DIM, 1) = initialEstimate;
-                newP.block(0, 0, x.size(), x.size()) = p;
-                newP.block(x.size(), x.size(), OBJECT_STATE_DIM, OBJECT_STATE_DIM) = initialCov;
+                X extendedX = X::Zero(updatedX.size() + OBJECT_STATE_DIM);
+                P extendedP = P::Zero(updatedP.rows() + OBJECT_STATE_DIM, updatedP.cols() + OBJECT_STATE_DIM);
+                extendedX.block(0, 0, updatedX.size(), 1) = updatedX;
+                extendedX.block(updatedX.size(), 0, OBJECT_STATE_DIM, 1) = initialEstimate;
+                extendedP.block(0, 0, updatedX.size(), updatedX.size()) = updatedP;
+                extendedP.block(updatedX.size(), updatedX.size(), OBJECT_STATE_DIM, OBJECT_STATE_DIM) = initialCov;
 
-                x = newX;
-                p = newP;
-                ASSERT_COV(p);
-                std::tie(z_hat, s) = measure(x, p);
+                updatedX = extendedX;
+                updatedP = extendedP;
+                ASSERT_COV(updatedP);
+                // std::tie(z_hat, s) = measure(x, p);
             }
         }
 
-        return std::make_pair(x, p);
+        return std::make_pair(updatedX, updatedP);
     }
 
     template<std::size_t VEHICLE_STATE_DIM, std::size_t VEHICLE_MEAS_DIM, std::size_t OBJECT_STATE_DIM,
