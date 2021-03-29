@@ -87,21 +87,21 @@ namespace ekf_slam::single_track_model {
 
         vehicleDynamicContainer.q_func = [&dt, sigmaA2, sigmaDDPsi2](auto x) -> typename State<T>::Mat {
             State<T> state{x};
-            Eigen::Vector3d GammaA;
+            Eigen::Matrix<T, 3, 1> GammaA;
             // clang-format off
             GammaA <<
                     0.5 * dt * dt * std::cos(state.psi),
                     0.5 * dt * dt * std::sin(state.psi),
                     dt;
             // clang-format on
-            Eigen::Vector2d GammaDDPsi;
+            Eigen::Matrix<T, 2, 1> GammaDDPsi;
             // clang-format off
             GammaDDPsi <<
                     0.5 * dt * dt,
                     dt;
             // clang-format on
-            auto Q_a = GammaA * GammaA.transpose() * sigmaA2;
-            auto Q_DDPsi = GammaDDPsi * GammaDDPsi.transpose() * sigmaDDPsi2;
+            Eigen::Matrix<T, 3, 3> Q_a = GammaA * GammaA.transpose() * sigmaA2;
+            Eigen::Matrix<T, 2, 2> Q_DDPsi = GammaDDPsi * GammaDDPsi.transpose() * sigmaDDPsi2;
             ASSERT_COV(Q_a);
             ASSERT_COV(Q_DDPsi);
             Eigen::Matrix<T, 5, 5> Q = Eigen::Matrix<T, 5, 5>::Zero();
