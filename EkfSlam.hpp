@@ -468,9 +468,10 @@ namespace ekf_slam {
         for (auto c = 0U; c < numObjects(x); ++c) {
             J_H.block(VEHICLE_MEAS_DIM + c * OBJECT_MEAS_DIM, VEHICLE_STATE_DIM + c * OBJECT_STATE_DIM, OBJECT_MEAS_DIM,
                       OBJECT_STATE_DIM) = objectDynamic.j_h_object(x_o(x, c), x_v(x));
-            J_H.block(0, VEHICLE_MEAS_DIM + c * OBJECT_MEAS_DIM, OBJECT_MEAS_DIM, VEHICLE_STATE_DIM) =
+            J_H.block(VEHICLE_MEAS_DIM + c * OBJECT_MEAS_DIM, 0, OBJECT_MEAS_DIM, VEHICLE_STATE_DIM) =
                     objectDynamic.j_h_vehicle(x_o(x, c), x_v(x));
         }
+
         return J_H;
     }
 

@@ -1,5 +1,6 @@
 #include <cfenv>
 #include <chrono>
+#include <iomanip>
 #include <iostream>
 #include <thread>
 
@@ -9,13 +10,13 @@ int main() {
     feenableexcept(FE_INVALID | FE_OVERFLOW | FE_DIVBYZERO); // Floating point exceptions
     auto dt = 0.1;
 
-    ekf_slam::VehicleParams vehicleParams{1, 1, 1, 1};
+    ekf_slam::VehicleParams vehicleParams{10, 10, 1, 1};
     ekf_slam::ObjectParams objectParams{1, 1};
     ekf_slam::Manager manager{vehicleParams, objectParams};
 
     std::vector<ekf_slam::Manager::ObjectState> cones;
-    cones.emplace_back(1, 1);
-    cones.emplace_back(5, 5);
+    cones.emplace_back(100, 1);
+    //cones.emplace_back(5, 5);
     ekf_slam::Manager::VehicleState vehicleState{0, 0, 0, 0, 0};
     auto f = ekf_slam::single_track_model::make<double>(dt, 0, 0, 0, 0).f;
     auto coneH = ekf_slam::constant_position_model::make<double>(0, 0).h;
@@ -55,12 +56,18 @@ int main() {
             }
         }
 
-        auto [vehicle, cones] = manager.update(vehicleMeas, conesMeasured, dt);
-        std::cout << "State:" << static_cast<ekf_slam::Manager::VehicleState::Vec>(vehicleState).transpose()
+        auto [vehicle, estimatedCones] = manager.update(vehicleMeas, conesMeasured, dt);
+        std::cout << std::setw(5) << std::setprecision(1) << std::fixed;
+        std::cout << "State: " << static_cast<ekf_slam::Manager::VehicleState::Vec>(vehicleState).transpose()
                   << "\tMeas:" << static_cast<ekf_slam::Manager::VehicleMeas::Vec>(vehicleMeas).transpose()
                   << "\tEst:" << static_cast<ekf_slam::Manager::VehicleState::Vec>(vehicle).transpose()
                   << "\tNumber of Objects\t"
-                  << cones.size() << std::endl;
+                  << estimatedCones.size() << std::endl;
+
+        for (const auto &estimatedCone : estimatedCones) {
+            std::cout << "\t[" << estimatedCone.xPos << ", " << estimatedCone.yPos << "]" << std::endl;
+        }
+
 
         using namespace std::chrono_literals;
         std::this_thread::sleep_for(100ms);
