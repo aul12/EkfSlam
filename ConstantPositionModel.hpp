@@ -47,8 +47,8 @@ namespace ekf_slam::constant_position_model {
 
         // Conversion to local coordinates
         objectDynamicContainer.h = [](auto x_obj, auto x_vehicle) -> typename Meas<T>::Vec {
-            State obj{x_obj};
-            single_track_model::State vehicle{x_vehicle};
+            State<T> obj{x_obj};
+            single_track_model::State<T> vehicle{x_vehicle};
             auto dx = obj.xPos - vehicle.xPos;
             auto dy = obj.yPos - vehicle.yPos;
             Meas<T> meas{std::cos(-vehicle.psi) * dx - std::sin(-vehicle.psi) * dy,
@@ -58,7 +58,7 @@ namespace ekf_slam::constant_position_model {
         };
 
         objectDynamicContainer.j_h_object = [](auto x_obj, auto x_vehicle) -> typename Meas<T>::Mat {
-            single_track_model::State vehicle{x_vehicle};
+            single_track_model::State<T> vehicle{x_vehicle};
             typename Meas<T>::Mat j_h{};
             // clang-format off
             j_h << std::cos(-vehicle.psi), -std::sin(-vehicle.psi),
@@ -68,8 +68,8 @@ namespace ekf_slam::constant_position_model {
         };
 
         objectDynamicContainer.j_h_vehicle = [](auto x_obj, auto x_vehicle) {
-            State obj{x_obj};
-            single_track_model::State vehicle{x_vehicle};
+            State<T> obj{x_obj};
+            single_track_model::State<T> vehicle{x_vehicle};
             auto dx = obj.xPos - vehicle.xPos;
             auto dy = obj.yPos - vehicle.yPos;
             Eigen::Matrix<T, Meas<T>::DIM, single_track_model::State<T>::DIM> j_h;
@@ -91,8 +91,8 @@ namespace ekf_slam::constant_position_model {
     auto getInitialPosition(typename Meas<T>::Vec z, typename single_track_model::State<T>::Vec xVehicle) ->
             typename State<T>::Vec {
         Meas<T> object{z};
-        single_track_model::State vehicle{xVehicle};
-        State newState{object.xPos * std::cos(vehicle.psi) - object.yPos * std::sin(vehicle.psi) + vehicle.xPos,
+        single_track_model::State<T> vehicle{xVehicle};
+        State<T> newState{object.xPos * std::cos(vehicle.psi) - object.yPos * std::sin(vehicle.psi) + vehicle.xPos,
                        object.xPos * std::sin(vehicle.psi) + object.yPos * std::cos(vehicle.psi) + vehicle.yPos};
 
         return static_cast<typename State<T>::Vec>(newState);

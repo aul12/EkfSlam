@@ -367,8 +367,13 @@ namespace ekf_slam {
         auto count = 0U;
         while (true) {
             ++count;
-            auto allMapped = std::reduce(observationMapped.cbegin(), observationMapped.cend(), true,
-                                         [](auto a, auto b) { return a and b; });
+            bool allMapped = true;
+            for(auto const &observation : observationMapped) {
+                if(!observation) {
+                    allMapped = false;
+                    break;
+                }
+            }
             if (allMapped) {
                 break;
             }

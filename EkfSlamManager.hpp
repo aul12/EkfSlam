@@ -10,6 +10,8 @@
 #include "ConstantPositionModel.hpp"
 #include "EkfSlam.hpp"
 #include "SingleTrackModel.hpp"
+#include "DynamicContainer.hpp"
+#include "Util.hpp"
 
 namespace ekf_slam {
     struct VehicleParams {
