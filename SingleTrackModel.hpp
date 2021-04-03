@@ -25,7 +25,7 @@ namespace ekf_slam::single_track_model {
 
         explicit State(Vec x) : xPos{x(0)}, yPos{x(1)}, v{x(2)}, psi{x(3)}, dPsi{x(4)} {};
 
-        explicit operator Vec() {
+        Vec getVec() const {
             Vec ret{};
             ret(0) = xPos;
             ret(1) = yPos;
@@ -48,7 +48,7 @@ namespace ekf_slam::single_track_model {
 
         explicit Meas(Vec z) : v(z(0)), dPsi(z(1)){};
 
-        explicit operator Vec() {
+        Vec getVec() const {
             Vec ret{};
             ret(0) = v;
             ret(1) = dPsi;
@@ -68,7 +68,7 @@ namespace ekf_slam::single_track_model {
                               state.psi + state.dPsi * dt,
                               state.dPsi};
             // clang-format on
-            return static_cast<typename State<T>::Vec>(newState);
+            return newState.getVec();
         };
 
         vehicleDynamicContainer.j_f = [&dt](auto x) -> typename State<T>::Mat {
@@ -114,7 +114,7 @@ namespace ekf_slam::single_track_model {
         vehicleDynamicContainer.h = [](auto x) -> typename Meas<T>::Vec {
             State<T> state{x};
             Meas<T> meas{state.v, state.psi};
-            return static_cast<typename Meas<T>::Vec>(meas);
+            return meas.getVec();
         };
 
         vehicleDynamicContainer.j_h = [](auto x) -> Eigen::Matrix<T, Meas<T>::DIM, State<T>::DIM> {

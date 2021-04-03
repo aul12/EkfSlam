@@ -24,7 +24,7 @@ namespace ekf_slam::constant_position_model {
 
         explicit State(Vec x) : xPos{x(0)}, yPos{x(1)} {};
 
-        explicit operator Vec() {
+        Vec getVec() const {
             Vec ret{};
             ret(0) = xPos;
             ret(1) = yPos;
@@ -54,7 +54,7 @@ namespace ekf_slam::constant_position_model {
             Meas<T> meas{std::cos(-vehicle.psi) * dx - std::sin(-vehicle.psi) * dy,
                          std::sin(-vehicle.psi) * dx + std::cos(-vehicle.psi) * dy};
 
-            return static_cast<typename Meas<T>::Vec>(meas);
+            return meas.getVec();
         };
 
         objectDynamicContainer.j_h_object = [](auto x_obj, auto x_vehicle) -> typename Meas<T>::Mat {
@@ -95,7 +95,7 @@ namespace ekf_slam::constant_position_model {
         State newState{object.xPos * std::cos(vehicle.psi) - object.yPos * std::sin(vehicle.psi) + vehicle.xPos,
                        object.xPos * std::sin(vehicle.psi) + object.yPos * std::cos(vehicle.psi) + vehicle.yPos};
 
-        return static_cast<typename State<T>::Vec>(newState);
+        return newState.getVec();
     }
 
     template<typename T>
