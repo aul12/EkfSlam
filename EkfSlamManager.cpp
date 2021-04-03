@@ -20,7 +20,7 @@ namespace ekf_slam {
         auto z_vehicle = static_cast<VehicleMeas::Vec>(vehicleMeas);
         std::vector<ObjectMeas::Vec> z_object;
         std::transform(objectMeasurements.cbegin(), objectMeasurements.cend(), std::back_inserter(z_object),
-                       [](auto meas) { return static_cast<VehicleMeas::Vec>(meas); });
+                       [](auto meas) { return static_cast<ObjectMeas::Vec>(meas); });
         ekf.update(z_vehicle, z_object);
 
         VehicleState vehicleState{ekf.getVehicle()};
