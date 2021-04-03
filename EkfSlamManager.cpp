@@ -17,10 +17,10 @@ namespace ekf_slam {
     auto Manager::update(VehicleMeas vehicleMeas, const std::vector<ObjectMeas> &objectMeasurements, double dt)
             -> std::pair<VehicleState, std::vector<ObjectState>> {
         this->dt = dt;
-        auto z_vehicle = static_cast<VehicleMeas::Vec>(vehicleMeas);
+        auto z_vehicle = vehicleMeas.getVec();
         std::vector<ObjectMeas::Vec> z_object;
         std::transform(objectMeasurements.cbegin(), objectMeasurements.cend(), std::back_inserter(z_object),
-                       [](auto meas) { return static_cast<VehicleMeas::Vec>(meas); });
+                       [](ObjectMeas meas) { return meas.getVec(); });
         ekf.update(z_vehicle, z_object);
 
         VehicleState vehicleState{ekf.getVehicle()};

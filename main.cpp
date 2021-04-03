@@ -43,15 +43,12 @@ int main() {
     for (std::size_t c = 0; c < 1000; ++c) {
         vehicleState.dPsi += ddPsi(c * dt);
         vehicleState.v += a(c * dt);
-        vehicleState =
-                ekf_slam::Manager::VehicleState{f(static_cast<ekf_slam::Manager::VehicleState::Vec>(vehicleState))};
+        vehicleState = ekf_slam::Manager::VehicleState(f(vehicleState.getVec()));
         ekf_slam::Manager::VehicleMeas vehicleMeas{vehicleState.v, vehicleState.dPsi};
 
         std::vector<ekf_slam::Manager::ObjectMeas> conesMeasured;
         for (auto cone : cones) {
-            auto coneLocal = ekf_slam::Manager::ObjectMeas{
-                    coneH(static_cast<ekf_slam::Manager::ObjectState::Vec>(cone),
-                          static_cast<ekf_slam::Manager::VehicleState::Vec>(vehicleState))};
+            auto coneLocal = ekf_slam::Manager::ObjectMeas{coneH(cone.getVec(), vehicleState.getVec())};
             if (coneLocal.xPos > 0) {
                 conesMeasured.emplace_back(coneLocal);
             }
@@ -59,9 +56,9 @@ int main() {
 
         auto [vehicle, estimatedCones] = manager.update(vehicleMeas, conesMeasured, dt);
         std::cout << std::setw(5) << std::setprecision(1) << std::fixed;
-        std::cout << "State: " << static_cast<ekf_slam::Manager::VehicleState::Vec>(vehicleState).transpose()
-                  << "\tMeas:" << static_cast<ekf_slam::Manager::VehicleMeas::Vec>(vehicleMeas).transpose()
-                  << "\tEst:" << static_cast<ekf_slam::Manager::VehicleState::Vec>(vehicle).transpose()
+        std::cout << "State: " << vehicleState.getVec().transpose()
+                  << "\tMeas:" << vehicleMeas.getVec().transpose()
+                  << "\tEst:" << vehicle.getVec().transpose()
                   << "\tNumber of Objects\t"
                   << estimatedCones.size() << std::endl;
 
