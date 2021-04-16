@@ -71,13 +71,13 @@ namespace ekf_slam {
         auto dataAssociation(Z z, S s, ObjectMeasurements measurements) const -> std::map<std::size_t, std::size_t>;
 
         // Helper functions single objects <-> vector conversion
-        auto getdf(const X &x) const;
-        auto getQ(const X &x) const;
-        auto getdh(const X &x) const;
-        auto getR(const X &x) const;
-        auto x_v(X x) const;
-        auto numObjects(const X &x) const;
-        auto x_o(X x, std::size_t i) const;
+        auto getdf(const X &x) const -> Mat;
+        auto getQ(const X &x) const -> Mat;
+        auto getdh(const X &x) const -> Mat;
+        auto getR(const X &x) const -> Mat;
+        auto x_v(X x) const -> X;
+        auto numObjects(const X &x) const -> std::size_t;
+        auto x_o(X x, std::size_t i) const -> X;
 
         // Constant member
         VehicleDynamic vehicleDynamic;
@@ -173,7 +173,9 @@ namespace ekf_slam {
 
         assert(numObjects(x) == measurements.size());
 
-        auto [z_hat, s] = measure(x, p);
+        auto result = measure(x, p);
+        Z z_hat = result.first;
+        S s = result.second;
 
         // Data association
         auto associationMap = dataAssociation(z_hat, s, measurements);
@@ -222,7 +224,9 @@ namespace ekf_slam {
     auto EKFSlam<VEHICLE_STATE_DIM, VEHICLE_MEAS_DIM, OBJECT_STATE_DIM, OBJECT_MEAS_DIM, T>::addTracks(
             X x, P p, typename VehicleDynamic::Z vehicleMeas, ObjectMeasurements measurements) const
             -> std::pair<X, P> {
-        auto [z_hat, s] = measure(x, p);
+        auto result = measure(x, p);
+        Z z_hat = result.first;
+        S s = result.second;
 
         // We do not update in place as this can result in missing cones if a new cone can be matched to two
         // measurements
@@ -277,7 +281,9 @@ namespace ekf_slam {
     auto EKFSlam<VEHICLE_STATE_DIM, VEHICLE_MEAS_DIM, OBJECT_STATE_DIM, OBJECT_MEAS_DIM, T>::separateTracksNotMeasured(
             EKFSlam::X x, EKFSlam::P p, ObjectMeasurements objectMeasurements) const -> std::tuple<X, P, TrackList> {
 
-        auto [z_hat, s] = measure(x, p);
+        auto result = measure(x, p);
+        Z z_hat = result.first;
+        S s = result.second;
 
         std::vector<std::pair<typename ObjectDynamic::X, typename ObjectDynamic::P>> invisibleObjects;
         for (auto c = 0U; c < numObjects(x); ++c) {
@@ -439,7 +445,7 @@ namespace ekf_slam {
      */
     template<std::size_t VEHICLE_STATE_DIM, std::size_t VEHICLE_MEAS_DIM, std::size_t OBJECT_STATE_DIM,
              std::size_t OBJECT_MEAS_DIM, typename T>
-    auto EKFSlam<VEHICLE_STATE_DIM, VEHICLE_MEAS_DIM, OBJECT_STATE_DIM, OBJECT_MEAS_DIM, T>::getdf(const X &x) const {
+    auto EKFSlam<VEHICLE_STATE_DIM, VEHICLE_MEAS_DIM, OBJECT_STATE_DIM, OBJECT_MEAS_DIM, T>::getdf(const X &x) const -> Mat {
         Mat J_F = Mat::Zero(x.size(), x.size());
 
         J_F.block(0, 0, VEHICLE_STATE_DIM, VEHICLE_STATE_DIM) = vehicleDynamic.j_f(x_v(x));
@@ -454,7 +460,7 @@ namespace ekf_slam {
 
     template<std::size_t VEHICLE_STATE_DIM, std::size_t VEHICLE_MEAS_DIM, std::size_t OBJECT_STATE_DIM,
              std::size_t OBJECT_MEAS_DIM, typename T>
-    auto EKFSlam<VEHICLE_STATE_DIM, VEHICLE_MEAS_DIM, OBJECT_STATE_DIM, OBJECT_MEAS_DIM, T>::getQ(const X &x) const {
+    auto EKFSlam<VEHICLE_STATE_DIM, VEHICLE_MEAS_DIM, OBJECT_STATE_DIM, OBJECT_MEAS_DIM, T>::getQ(const X &x) const -> Mat {
         Mat Q = Mat::Zero(x.size(), x.size());
 
         Q.block(0, 0, VEHICLE_STATE_DIM, VEHICLE_STATE_DIM) = vehicleDynamic.q_func(x_v(x));
@@ -471,7 +477,7 @@ namespace ekf_slam {
 
     template<std::size_t VEHICLE_STATE_DIM, std::size_t VEHICLE_MEAS_DIM, std::size_t OBJECT_STATE_DIM,
              std::size_t OBJECT_MEAS_DIM, typename T>
-    auto EKFSlam<VEHICLE_STATE_DIM, VEHICLE_MEAS_DIM, OBJECT_STATE_DIM, OBJECT_MEAS_DIM, T>::getdh(const X &x) const {
+    auto EKFSlam<VEHICLE_STATE_DIM, VEHICLE_MEAS_DIM, OBJECT_STATE_DIM, OBJECT_MEAS_DIM, T>::getdh(const X &x) const -> Mat {
         Mat J_H = Mat::Zero(VEHICLE_MEAS_DIM + numObjects(x) * OBJECT_MEAS_DIM, x.size());
         J_H.block(0, 0, VEHICLE_MEAS_DIM, VEHICLE_STATE_DIM) = vehicleDynamic.j_h(x_v(x));
 
@@ -487,7 +493,7 @@ namespace ekf_slam {
 
     template<std::size_t VEHICLE_STATE_DIM, std::size_t VEHICLE_MEAS_DIM, std::size_t OBJECT_STATE_DIM,
              std::size_t OBJECT_MEAS_DIM, typename T>
-    auto EKFSlam<VEHICLE_STATE_DIM, VEHICLE_MEAS_DIM, OBJECT_STATE_DIM, OBJECT_MEAS_DIM, T>::getR(const X &x) const {
+    auto EKFSlam<VEHICLE_STATE_DIM, VEHICLE_MEAS_DIM, OBJECT_STATE_DIM, OBJECT_MEAS_DIM, T>::getR(const X &x) const -> Mat {
         Mat R = Mat::Zero(VEHICLE_MEAS_DIM + numObjects(x) * OBJECT_MEAS_DIM,
                           VEHICLE_MEAS_DIM + numObjects(x) * OBJECT_MEAS_DIM);
         R.block(0, 0, VEHICLE_MEAS_DIM, VEHICLE_MEAS_DIM) = vehicleDynamic.r_func();
@@ -504,22 +510,21 @@ namespace ekf_slam {
 
     template<std::size_t VEHICLE_STATE_DIM, std::size_t VEHICLE_MEAS_DIM, std::size_t OBJECT_STATE_DIM,
              std::size_t OBJECT_MEAS_DIM, typename T>
-    auto EKFSlam<VEHICLE_STATE_DIM, VEHICLE_MEAS_DIM, OBJECT_STATE_DIM, OBJECT_MEAS_DIM, T>::x_v(X x) const {
+    auto EKFSlam<VEHICLE_STATE_DIM, VEHICLE_MEAS_DIM, OBJECT_STATE_DIM, OBJECT_MEAS_DIM, T>::x_v(X x) const -> X {
         return x.block(0, 0, VEHICLE_STATE_DIM, 1);
     }
 
     template<std::size_t VEHICLE_STATE_DIM, std::size_t VEHICLE_MEAS_DIM, std::size_t OBJECT_STATE_DIM,
              std::size_t OBJECT_MEAS_DIM, typename T>
     auto
-    EKFSlam<VEHICLE_STATE_DIM, VEHICLE_MEAS_DIM, OBJECT_STATE_DIM, OBJECT_MEAS_DIM, T>::numObjects(const X &x) const {
+    EKFSlam<VEHICLE_STATE_DIM, VEHICLE_MEAS_DIM, OBJECT_STATE_DIM, OBJECT_MEAS_DIM, T>::numObjects(const X &x) const -> std::size_t {
         assert((x.size() - VEHICLE_STATE_DIM) % OBJECT_STATE_DIM == 0);
         return (x.size() - VEHICLE_STATE_DIM) / OBJECT_STATE_DIM;
     }
 
     template<std::size_t VEHICLE_STATE_DIM, std::size_t VEHICLE_MEAS_DIM, std::size_t OBJECT_STATE_DIM,
              std::size_t OBJECT_MEAS_DIM, typename T>
-    auto EKFSlam<VEHICLE_STATE_DIM, VEHICLE_MEAS_DIM, OBJECT_STATE_DIM, OBJECT_MEAS_DIM, T>::x_o(X x,
-                                                                                                 std::size_t i) const {
+    auto EKFSlam<VEHICLE_STATE_DIM, VEHICLE_MEAS_DIM, OBJECT_STATE_DIM, OBJECT_MEAS_DIM, T>::x_o(X x, std::size_t i) const -> X{
         assert(i < numObjects(x));
         return x.block(VEHICLE_STATE_DIM + i * OBJECT_STATE_DIM, 0, OBJECT_STATE_DIM, 1);
     }

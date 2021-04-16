@@ -24,7 +24,7 @@ int main() {
     auto f = ekf_slam::single_track_model::make<double>(dt, 0, 0, 0, 0).f;
     auto coneH = ekf_slam::constant_position_model::make<double>(0, 0).h;
 
-    auto ddPsi = [](auto t) -> double {
+    auto ddPsi = [](double t) -> double {
         return 0;
         if (t < 1) {
             return 0;
@@ -35,7 +35,7 @@ int main() {
         }
     };
 
-    auto a = [](auto t) -> double {
+    auto a = [](double t) -> double {
         if (t < 1) {
             return 1;
         } else {
@@ -57,7 +57,9 @@ int main() {
             }
         }
 
-        auto [vehicle, estimatedCones] = manager.update(vehicleMeas, conesMeasured, dt);
+        auto result = manager.update(vehicleMeas, conesMeasured, dt);
+        ekf_slam::Manager::VehicleState vehicle = result.first;
+        std::vector<ekf_slam::Manager::ObjectState> estimatedCones = result.second;
         std::cout << std::setw(5) << std::setprecision(1) << std::fixed;
         std::cout << "State: " << vehicleState.getVec().transpose()
                   << "\tMeas:" << vehicleMeas.getVec().transpose()
@@ -70,7 +72,6 @@ int main() {
         }*/
 
 
-        using namespace std::chrono_literals;
-        std::this_thread::sleep_for(100ms);
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 }

@@ -57,9 +57,9 @@ namespace ekf_slam::single_track_model {
     };
 
     template<typename T>
-    auto make(const T &dt, T sigmaA2, T sigmaDDPsi2, T sigmaV2, T sigmaDPsi2) {
+    auto make(const T &dt, T sigmaA2, T sigmaDDPsi2, T sigmaV2, T sigmaDPsi2) -> VehicleDynamicContainer<State<T>::DIM, Meas<T>::DIM, T> {
         VehicleDynamicContainer<State<T>::DIM, Meas<T>::DIM, T> vehicleDynamicContainer;
-        vehicleDynamicContainer.f = [&dt](auto x) -> typename State<T>::Vec {
+        vehicleDynamicContainer.f = [&dt](typename State<T>::Vec x) -> typename State<T>::Vec {
             State<T> state{x};
             // clang-format off
             State<T> newState{state.xPos + std::cos(state.psi) * state.v * dt,
@@ -71,7 +71,7 @@ namespace ekf_slam::single_track_model {
             return newState.getVec();
         };
 
-        vehicleDynamicContainer.j_f = [&dt](auto x) -> typename State<T>::Mat {
+        vehicleDynamicContainer.j_f = [&dt](typename State<T>::Vec x) -> typename State<T>::Mat {
             State<T> state{x};
             typename State<T>::Mat j_f;
             // clang-format off
@@ -85,7 +85,7 @@ namespace ekf_slam::single_track_model {
             return j_f;
         };
 
-        vehicleDynamicContainer.q_func = [&dt, sigmaA2, sigmaDDPsi2](auto x) -> typename State<T>::Mat {
+        vehicleDynamicContainer.q_func = [&dt, sigmaA2, sigmaDDPsi2](typename State<T>::Vec x) -> typename State<T>::Mat {
             State<T> state{x};
             Eigen::Matrix<T, 3, 1> GammaA;
             // clang-format off
@@ -111,13 +111,13 @@ namespace ekf_slam::single_track_model {
             return Q;
         };
 
-        vehicleDynamicContainer.h = [](auto x) -> typename Meas<T>::Vec {
+        vehicleDynamicContainer.h = [](typename State<T>::Vec x) -> typename Meas<T>::Vec {
             State<T> state{x};
             Meas<T> meas{state.v, state.psi};
             return meas.getVec();
         };
 
-        vehicleDynamicContainer.j_h = [](auto x) -> Eigen::Matrix<T, Meas<T>::DIM, State<T>::DIM> {
+        vehicleDynamicContainer.j_h = [](typename State<T>::Vec x) -> Eigen::Matrix<T, Meas<T>::DIM, State<T>::DIM> {
             Eigen::Matrix<T, Meas<T>::DIM, State<T>::DIM> c = Eigen::Matrix<T, Meas<T>::DIM, State<T>::DIM>::Zero();
             c <<
                     // clang-format off

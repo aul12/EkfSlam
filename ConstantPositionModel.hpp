@@ -36,17 +36,17 @@ namespace ekf_slam::constant_position_model {
     using Meas = State<T>;
 
     template<typename T>
-    auto make(T q, T r) {
+    auto make(T q, T r) -> ObjectDynamicContainer<State<T>::DIM, Meas<T>::DIM, single_track_model::State<T>::DIM, T> {
         ObjectDynamicContainer<State<T>::DIM, Meas<T>::DIM, single_track_model::State<T>::DIM, T>
                 objectDynamicContainer;
-        objectDynamicContainer.f = [](auto x) -> typename State<T>::Vec { return x; }; // State remains the same
-        objectDynamicContainer.j_f = [](auto x) ->
+        objectDynamicContainer.f = [](typename State<T>::Vec x) -> typename State<T>::Vec { return x; }; // State remains the same
+        objectDynamicContainer.j_f = [](typename State<T>::Vec x) ->
                 typename State<T>::Mat { return State<T>::Mat::Zero(); }; // Jacobian is zero
-        objectDynamicContainer.q_func = [q](auto x) ->
+        objectDynamicContainer.q_func = [q](typename State<T>::Vec x) ->
                 typename State<T>::Mat { return State<T>::Mat::Identity() * q; }; // Equal noise on both coordinates
 
         // Conversion to local coordinates
-        objectDynamicContainer.h = [](auto x_obj, auto x_vehicle) -> typename Meas<T>::Vec {
+        objectDynamicContainer.h = [](typename State<T>::Vec x_obj, typename single_track_model::State<T>::Vec x_vehicle) -> typename Meas<T>::Vec {
             State<T> obj{x_obj};
             single_track_model::State<T> vehicle{x_vehicle};
             auto dx = obj.xPos - vehicle.xPos;
@@ -57,7 +57,7 @@ namespace ekf_slam::constant_position_model {
             return meas.getVec();
         };
 
-        objectDynamicContainer.j_h_object = [](auto x_obj, auto x_vehicle) -> typename Meas<T>::Mat {
+        objectDynamicContainer.j_h_object = [](typename State<T>::Vec x_obj, typename single_track_model::State<T>::Vec x_vehicle) -> typename Meas<T>::Mat {
             single_track_model::State<T> vehicle{x_vehicle};
             typename Meas<T>::Mat j_h{};
             // clang-format off
@@ -67,7 +67,7 @@ namespace ekf_slam::constant_position_model {
             return j_h;
         };
 
-        objectDynamicContainer.j_h_vehicle = [](auto x_obj, auto x_vehicle) {
+        objectDynamicContainer.j_h_vehicle = [](typename State<T>::Vec x_obj, typename single_track_model::State<T>::Vec x_vehicle) -> Eigen::Matrix<T, Meas<T>::DIM, single_track_model::State<T>::DIM> {
             State<T> obj{x_obj};
             single_track_model::State<T> vehicle{x_vehicle};
             auto dx = obj.xPos - vehicle.xPos;

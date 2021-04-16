@@ -3,7 +3,7 @@ project(EKFSlam)
 
 find_package (Eigen3 3.3 REQUIRED NO_MODULE)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 11)
 
 add_executable(${PROJECT_NAME} main.cpp EkfSlamManager.cpp Util.cpp)
 target_link_libraries(${PROJECT_NAME} Eigen3::Eigen)
