@@ -14,21 +14,22 @@ namespace ekf_slam {
             constant_position_model::get_initial_position<T>, constant_position_model::get_initial_covariance<T>} {
     }
 
-    auto Manager::update(VehicleMeas vehicleMeas, const std::vector<ObjectMeas> &objectMeasurements, double dt)
+    auto Manager::update(VehicleMeas vehicleMeas, const std::vector<ObjectMeas> &objectMeasurements, double delta_time)
             -> std::pair<VehicleState, std::vector<ObjectState>> {
-        this->dt = dt;
+        this->dt = delta_time;
         auto z_vehicle = vehicleMeas.get_vec();
         std::vector<ObjectMeas::Vec> z_object;
-        std::transform(objectMeasurements.cbegin(), objectMeasurements.cend(), std::back_inserter(z_object),
-                       [](ObjectMeas meas) -> ekf_slam::constant_position_model::State<T>::Vec { return meas.get_vec(); });
+        std::transform(
+                objectMeasurements.cbegin(), objectMeasurements.cend(), std::back_inserter(z_object),
+                [](ObjectMeas meas) -> ekf_slam::constant_position_model::State<T>::Vec { return meas.get_vec(); });
         ekf.update(z_vehicle, z_object);
 
-        VehicleState vehicleState{ekf.get_vehicle()};
+        VehicleState vehicle_state{ekf.get_vehicle()};
         std::vector<ObjectState> objects;
-        for (auto c=0U; c<ekf.get_number_of_objects(); ++c) {
+        for (auto c = 0U; c < ekf.get_number_of_objects(); ++c) {
             objects.emplace_back(ekf.get_object(c));
         }
 
-        return std::make_pair(vehicleState, objects);
+        return std::make_pair(vehicle_state, objects);
     }
 } // namespace ekf_slam

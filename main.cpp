@@ -38,9 +38,8 @@ auto main() -> int {
     auto a = [](double t) -> double {
         if (t < 1) {
             return 1;
-        } else {
-            return 0;
         }
+        return 0;
     };
 
     for (std::size_t c = 0; c < 1000; ++c) {

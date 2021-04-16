@@ -8,9 +8,9 @@
 #define EKFSLAM_EKFSLAMMANAGER_HPP
 
 #include "ConstantPositionModel.hpp"
+#include "DynamicContainer.hpp"
 #include "EkfSlam.hpp"
 #include "SingleTrackModel.hpp"
-#include "DynamicContainer.hpp"
 #include "Util.hpp"
 
 namespace ekf_slam {
@@ -34,14 +34,14 @@ namespace ekf_slam {
 
         Manager(VehicleParams vehicleParams, ObjectParams objectParams);
 
-        auto update(VehicleMeas vehicleMeas, const std::vector<ObjectMeas> &objectMeasurements, double dt) ->
-                std::pair<VehicleState, std::vector<ObjectState>>;
+        auto update(VehicleMeas vehicleMeas, const std::vector<ObjectMeas> &objectMeasurements, double delta_time)
+                -> std::pair<VehicleState, std::vector<ObjectState>>;
 
       private:
-        double dt;
+        double dt{};
         EKF ekf;
     };
-}
+} // namespace ekf_slam
 
 
 #endif // EKFSLAM_EKFSLAMMANAGER_HPP
