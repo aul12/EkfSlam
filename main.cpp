@@ -43,15 +43,15 @@ auto main() -> int {
     };
 
     for (std::size_t c = 0; c < 1000; ++c) {
-        vehicle_state.dPsi += dd_psi(c * dt);
-        vehicle_state.v += a(c * dt);
+        vehicle_state.set_d_psi(vehicle_state.get_d_psi() + dd_psi(c * dt));
+        vehicle_state.set_v(vehicle_state.get_v() + a(c * dt));
         vehicle_state = ekf_slam::Manager::VehicleState(f(vehicle_state.get_vec()));
-        ekf_slam::Manager::VehicleMeas vehicle_meas{vehicle_state.v, vehicle_state.dPsi};
+        ekf_slam::Manager::VehicleMeas vehicle_meas{vehicle_state.get_v(), vehicle_state.get_d_psi()};
 
         std::vector<ekf_slam::Manager::ObjectMeas> cones_measured;
         for (auto cone : cones) {
             auto cone_local = ekf_slam::Manager::ObjectMeas{cone_h(cone.get_vec(), vehicle_state.get_vec())};
-            if (cone_local.xPos > 0) {
+            if (cone_local.get_x_pos() > 0) {
                 cones_measured.emplace_back(cone_local);
             }
         }

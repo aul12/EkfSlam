@@ -16,7 +16,10 @@ namespace ekf_slam {
     namespace constant_position_model {
         template<typename T>
         struct State {
+          private:
             T xPos, yPos;
+
+          public:
             static constexpr std::size_t DIM = 2;
             using Vec = Eigen::Matrix<T, DIM, 1>;
             using Mat = Eigen::Matrix<T, DIM, DIM>;
@@ -27,9 +30,17 @@ namespace ekf_slam {
 
             auto get_vec() const -> Vec {
                 Vec ret{};
-                ret(0) = xPos;
-                ret(1) = yPos;
+                ret(0) = get_x_pos();
+                ret(1) = get_y_pos();
                 return ret;
+            }
+
+            auto get_x_pos() const -> T {
+                return this->xPos;
+            }
+
+            auto get_y_pos() const -> T {
+                return this->yPos;
             }
         };
 
@@ -54,10 +65,10 @@ namespace ekf_slam {
                     typename Meas<T>::Vec {
                         State<T> obj{x_obj};
                         single_track_model::State<T> vehicle{x_vehicle};
-                        auto dx = obj.xPos - vehicle.xPos;
-                        auto dy = obj.yPos - vehicle.yPos;
-                        Meas<T> meas{std::cos(-vehicle.psi) * dx - std::sin(-vehicle.psi) * dy,
-                                     std::sin(-vehicle.psi) * dx + std::cos(-vehicle.psi) * dy};
+                        auto dx = obj.get_x_pos() - vehicle.get_x_pos();
+                        auto dy = obj.get_y_pos() - vehicle.get_y_pos();
+                        Meas<T> meas{std::cos(-vehicle.get_psi()) * dx - std::sin(-vehicle.get_psi()) * dy,
+                                     std::sin(-vehicle.get_psi()) * dx + std::cos(-vehicle.get_psi()) * dy};
 
                         return meas.get_vec();
                     };
@@ -68,8 +79,8 @@ namespace ekf_slam {
                 single_track_model::State<T> vehicle{x_vehicle};
                 typename Meas<T>::Mat j_h{};
                 // clang-format off
-                j_h << std::cos(-vehicle.psi), -std::sin(-vehicle.psi),
-                       std::sin(-vehicle.psi), std::cos(vehicle.psi);
+                j_h << std::cos(-vehicle.get_psi()), -std::sin(-vehicle.get_psi()),
+                       std::sin(-vehicle.get_psi()), std::cos(vehicle.get_psi());
                 // clang-format on
                 return j_h;
             };
@@ -79,12 +90,12 @@ namespace ekf_slam {
                     -> Eigen::Matrix<T, Meas<T>::DIM, single_track_model::State<T>::DIM> {
                 State<T> obj{x_obj};
                 single_track_model::State<T> vehicle{x_vehicle};
-                auto dx = obj.xPos - vehicle.xPos;
-                auto dy = obj.yPos - vehicle.yPos;
+                auto dx = obj.get_x_pos() - vehicle.get_x_pos();
+                auto dy = obj.get_y_pos() - vehicle.get_y_pos();
                 Eigen::Matrix<T, Meas<T>::DIM, single_track_model::State<T>::DIM> j_h;
                 // clang-format off
-                j_h <<  std::cos(-vehicle.psi) * (-1), -std::sin(-vehicle.psi) * (-1), 0, -std::sin(-vehicle.psi) * (-1) * dx - std::cos(-vehicle.psi) * dy * (-1), 0,
-                        std::sin(-vehicle.psi) * (-1), std::cos(-vehicle.psi) * (-1),  0, std::cos(-vehicle.psi) * (-1) * dx + (-std::sin(-vehicle.psi)) * dy * (-1), 0;
+                j_h <<  std::cos(-vehicle.get_psi()) * (-1), -std::sin(-vehicle.get_psi()) * (-1), 0, -std::sin(-vehicle.get_psi()) * (-1) * dx - std::cos(-vehicle.get_psi()) * dy * (-1), 0,
+                        std::sin(-vehicle.get_psi()) * (-1), std::cos(-vehicle.get_psi()) * (-1),  0, std::cos(-vehicle.get_psi()) * (-1) * dx + (-std::sin(-vehicle.get_psi())) * dy * (-1), 0;
                 // clang-format on
                 return j_h;
             };
@@ -101,9 +112,9 @@ namespace ekf_slam {
                 typename State<T>::Vec {
             Meas<T> object{z};
             single_track_model::State<T> vehicle{xVehicle};
-            State<T> new_state{object.xPos * std::cos(vehicle.psi) - object.yPos * std::sin(vehicle.psi) + vehicle.xPos,
-                               object.xPos * std::sin(vehicle.psi) + object.yPos * std::cos(vehicle.psi) +
-                                       vehicle.yPos};
+            State<T> new_state{object.get_x_pos() * std::cos(vehicle.get_psi()) - object.get_y_pos() * std::sin(vehicle.get_psi()) + vehicle.get_x_pos(),
+                               object.get_x_pos() * std::sin(vehicle.get_psi()) + object.get_y_pos() * std::cos(vehicle.get_psi()) +
+                                       vehicle.get_y_pos()};
 
             return new_state.get_vec();
         }

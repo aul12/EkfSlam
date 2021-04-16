@@ -14,10 +14,12 @@ namespace ekf_slam {
     namespace single_track_model {
         template<typename T>
         struct State {
+          private:
             T xPos, yPos;
             T v;
             T psi, dPsi;
 
+          public:
             static constexpr std::size_t DIM = 5;
             using Vec = Eigen::Matrix<T, DIM, 1>;
             using Mat = Eigen::Matrix<T, DIM, DIM>;
@@ -35,12 +37,38 @@ namespace ekf_slam {
                 ret(4) = dPsi;
                 return ret;
             }
+            
+            auto get_psi() const -> T {
+                return this->psi;
+            }
+            auto get_d_psi() const -> T {
+                return this->dPsi;
+            }
+            auto get_x_pos() const -> T {
+                return this->xPos;
+            }
+            auto get_y_pos() const -> T {
+                return this->yPos;
+            }
+            auto get_v() const -> T {
+                return this->v;
+            }
+
+            void set_d_psi(T val) {
+                this->dPsi = val;
+            }
+
+            void set_v(T val) {
+                this->v = val;
+            }
         };
 
         template<typename T>
         struct Meas {
+          private:
             T v, dPsi;
 
+          public:
             static constexpr std::size_t DIM = 2;
             using Vec = Eigen::Matrix<T, DIM, 1>;
             using Mat = Eigen::Matrix<T, DIM, DIM>;
@@ -55,6 +83,14 @@ namespace ekf_slam {
                 ret(1) = dPsi;
                 return ret;
             }
+
+            auto get_v() const -> T {
+                return this->v;
+            }
+
+            auto get_d_psi() const -> T {
+                return this->dPsi;
+            }
         };
 
         template<typename T>
@@ -64,11 +100,11 @@ namespace ekf_slam {
             vehicle_dynamic_container.f = [&dt](typename State<T>::Vec x) -> typename State<T>::Vec {
                 State<T> state{x};
                 // clang-format off
-                State<T> new_state{state.xPos + std::cos(state.psi) * state.v * dt,
-                                  state.yPos + std::sin(state.psi) * state.v * dt,
-                                  state.v,
-                                  state.psi + state.dPsi * dt,
-                                  state.dPsi};
+                State<T> new_state{state.get_x_pos() + std::cos(state.get_psi()) * state.get_v() * dt,
+                                  state.get_y_pos() + std::sin(state.get_psi()) * state.get_v() * dt,
+                                  state.get_v(),
+                                  state.get_psi() + state.get_d_psi() * dt,
+                                  state.get_d_psi()};
                 // clang-format on
                 return new_state.get_vec();
             };
@@ -78,8 +114,8 @@ namespace ekf_slam {
                 typename State<T>::Mat j_f;
                 // clang-format off
                 j_f <<
-                    1, 0, std::cos(state.psi) * dt, -std::sin(state.psi) * state.v *dt, 0,
-                    0, 1, std::sin(state.psi) * dt, std::cos(state.psi) * state.v * dt , 0,
+                    1, 0, std::cos(state.get_psi()) * dt, -std::sin(state.get_psi()) * state.get_v() *dt, 0,
+                    0, 1, std::sin(state.get_psi()) * dt, std::cos(state.get_psi()) * state.get_v() * dt , 0,
                     0, 0, 1, 0, 0,
                     0, 0, 0, 1, dt,
                     0, 0, 0, 0, 1;
@@ -93,8 +129,8 @@ namespace ekf_slam {
                         Eigen::Matrix<T, 3, 1> gamma_a;
                         // clang-format off
                         gamma_a <<
-                                0.5 * dt * dt * std::cos(state.psi),
-                                0.5 * dt * dt * std::sin(state.psi),
+                                0.5 * dt * dt * std::cos(state.get_psi()),
+                                0.5 * dt * dt * std::sin(state.get_psi()),
                                 dt;
                         // clang-format on
                         Eigen::Matrix<T, 2, 1> gamma_dd_psi;
@@ -116,7 +152,7 @@ namespace ekf_slam {
 
             vehicle_dynamic_container.h = [](typename State<T>::Vec x) -> typename Meas<T>::Vec {
                 State<T> state{x};
-                Meas<T> meas{state.v, state.psi};
+                Meas<T> meas{state.get_v(), state.get_psi()};
                 return meas.get_vec();
             };
 
