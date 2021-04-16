@@ -6,13 +6,13 @@
 
 #include "EkfSlamManager.hpp"
 
-int main() {
+auto main() -> int {
     feenableexcept(FE_INVALID | FE_OVERFLOW | FE_DIVBYZERO); // Floating point exceptions
     auto dt = 0.1;
 
-    ekf_slam::VehicleParams vehicleParams{1000, 1000, 100, 1};
-    ekf_slam::ObjectParams objectParams{0, 1};
-    ekf_slam::Manager manager{vehicleParams, objectParams};
+    ekf_slam::VehicleParams vehicle_params{1000, 1000, 100, 1};
+    ekf_slam::ObjectParams object_params{0, 1};
+    ekf_slam::Manager manager{vehicle_params, object_params};
 
     std::vector<ekf_slam::Manager::ObjectState> cones;
     for (auto c = 0; c < 100; c += 20) {
@@ -20,11 +20,11 @@ int main() {
         cones.emplace_back(c, -2);
     }
 
-    ekf_slam::Manager::VehicleState vehicleState{0, 0, 0, 0, 0};
+    ekf_slam::Manager::VehicleState vehicle_state{0, 0, 0, 0, 0};
     auto f = ekf_slam::single_track_model::make<double>(dt, 0, 0, 0, 0).f;
-    auto coneH = ekf_slam::constant_position_model::make<double>(0, 0).h;
+    auto cone_h = ekf_slam::constant_position_model::make<double>(0, 0).h;
 
-    auto ddPsi = [](double t) -> double {
+    auto dd_psi = [](double t) -> double {
         return 0;
         if (t < 1) {
             return 0;
@@ -44,28 +44,26 @@ int main() {
     };
 
     for (std::size_t c = 0; c < 1000; ++c) {
-        vehicleState.dPsi += ddPsi(c * dt);
-        vehicleState.v += a(c * dt);
-        vehicleState = ekf_slam::Manager::VehicleState(f(vehicleState.getVec()));
-        ekf_slam::Manager::VehicleMeas vehicleMeas{vehicleState.v, vehicleState.dPsi};
+        vehicle_state.dPsi += dd_psi(c * dt);
+        vehicle_state.v += a(c * dt);
+        vehicle_state = ekf_slam::Manager::VehicleState(f(vehicle_state.get_vec()));
+        ekf_slam::Manager::VehicleMeas vehicle_meas{vehicle_state.v, vehicle_state.dPsi};
 
-        std::vector<ekf_slam::Manager::ObjectMeas> conesMeasured;
+        std::vector<ekf_slam::Manager::ObjectMeas> cones_measured;
         for (auto cone : cones) {
-            auto coneLocal = ekf_slam::Manager::ObjectMeas{coneH(cone.getVec(), vehicleState.getVec())};
-            if (coneLocal.xPos > 0) {
-                conesMeasured.emplace_back(coneLocal);
+            auto cone_local = ekf_slam::Manager::ObjectMeas{cone_h(cone.get_vec(), vehicle_state.get_vec())};
+            if (cone_local.xPos > 0) {
+                cones_measured.emplace_back(cone_local);
             }
         }
 
-        auto result = manager.update(vehicleMeas, conesMeasured, dt);
+        auto result = manager.update(vehicle_meas, cones_measured, dt);
         ekf_slam::Manager::VehicleState vehicle = result.first;
-        std::vector<ekf_slam::Manager::ObjectState> estimatedCones = result.second;
+        std::vector<ekf_slam::Manager::ObjectState> estimated_cones = result.second;
         std::cout << std::setw(5) << std::setprecision(1) << std::fixed;
-        std::cout << "State: " << vehicleState.getVec().transpose()
-                  << "\tMeas:" << vehicleMeas.getVec().transpose()
-                  << "\tEst:" << vehicle.getVec().transpose()
-                  << "\tNumber of Objects\t"
-                  << estimatedCones.size() << std::endl;
+        std::cout << "State: " << vehicle_state.get_vec().transpose() << "\tMeas:" << vehicle_meas.get_vec().transpose()
+                  << "\tEst:" << vehicle.get_vec().transpose() << "\tNumber of Objects\t" << estimated_cones.size()
+                  << std::endl;
 
         /*for (const auto &estimatedCone : estimatedCones) {
             std::cout << "\t[" << estimatedCone.xPos << ", " << estimatedCone.yPos << "]" << std::endl;

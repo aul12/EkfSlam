@@ -12,7 +12,7 @@
 
 #include "SingleTrackModel.hpp"
 
-namespace ekf_slam::constant_position_model {
+namespace ekf_slam { namespace constant_position_model {
     template<typename T>
     struct State {
         T xPos, yPos;
@@ -24,7 +24,7 @@ namespace ekf_slam::constant_position_model {
 
         explicit State(Vec x) : xPos{x(0)}, yPos{x(1)} {};
 
-        Vec getVec() const {
+        Vec get_vec() const {
             Vec ret{};
             ret(0) = xPos;
             ret(1) = yPos;
@@ -38,15 +38,15 @@ namespace ekf_slam::constant_position_model {
     template<typename T>
     auto make(T q, T r) -> ObjectDynamicContainer<State<T>::DIM, Meas<T>::DIM, single_track_model::State<T>::DIM, T> {
         ObjectDynamicContainer<State<T>::DIM, Meas<T>::DIM, single_track_model::State<T>::DIM, T>
-                objectDynamicContainer;
-        objectDynamicContainer.f = [](typename State<T>::Vec x) -> typename State<T>::Vec { return x; }; // State remains the same
-        objectDynamicContainer.j_f = [](typename State<T>::Vec x) ->
+                object_dynamic_container;
+        object_dynamic_container.f = [](typename State<T>::Vec x) -> typename State<T>::Vec { return x; }; // State remains the same
+        object_dynamic_container.j_f = [](typename State<T>::Vec x) ->
                 typename State<T>::Mat { return State<T>::Mat::Zero(); }; // Jacobian is zero
-        objectDynamicContainer.q_func = [q](typename State<T>::Vec x) ->
+        object_dynamic_container.q_func = [q](typename State<T>::Vec x) ->
                 typename State<T>::Mat { return State<T>::Mat::Identity() * q; }; // Equal noise on both coordinates
 
         // Conversion to local coordinates
-        objectDynamicContainer.h = [](typename State<T>::Vec x_obj, typename single_track_model::State<T>::Vec x_vehicle) -> typename Meas<T>::Vec {
+        object_dynamic_container.h = [](typename State<T>::Vec x_obj, typename single_track_model::State<T>::Vec x_vehicle) -> typename Meas<T>::Vec {
             State<T> obj{x_obj};
             single_track_model::State<T> vehicle{x_vehicle};
             auto dx = obj.xPos - vehicle.xPos;
@@ -54,10 +54,10 @@ namespace ekf_slam::constant_position_model {
             Meas<T> meas{std::cos(-vehicle.psi) * dx - std::sin(-vehicle.psi) * dy,
                          std::sin(-vehicle.psi) * dx + std::cos(-vehicle.psi) * dy};
 
-            return meas.getVec();
+            return meas.get_vec();
         };
 
-        objectDynamicContainer.j_h_object = [](typename State<T>::Vec x_obj, typename single_track_model::State<T>::Vec x_vehicle) -> typename Meas<T>::Mat {
+        object_dynamic_container.j_h_object = [](typename State<T>::Vec x_obj, typename single_track_model::State<T>::Vec x_vehicle) -> typename Meas<T>::Mat {
             single_track_model::State<T> vehicle{x_vehicle};
             typename Meas<T>::Mat j_h{};
             // clang-format off
@@ -67,7 +67,7 @@ namespace ekf_slam::constant_position_model {
             return j_h;
         };
 
-        objectDynamicContainer.j_h_vehicle = [](typename State<T>::Vec x_obj, typename single_track_model::State<T>::Vec x_vehicle) -> Eigen::Matrix<T, Meas<T>::DIM, single_track_model::State<T>::DIM> {
+        object_dynamic_container.j_h_vehicle = [](typename State<T>::Vec x_obj, typename single_track_model::State<T>::Vec x_vehicle) -> Eigen::Matrix<T, Meas<T>::DIM, single_track_model::State<T>::DIM> {
             State<T> obj{x_obj};
             single_track_model::State<T> vehicle{x_vehicle};
             auto dx = obj.xPos - vehicle.xPos;
@@ -80,30 +80,30 @@ namespace ekf_slam::constant_position_model {
             return j_h;
         };
 
-        objectDynamicContainer.r_func = [r]() -> typename Meas<T>::Mat {
+        object_dynamic_container.r_func = [r]() -> typename Meas<T>::Mat {
             return Meas<T>::Mat::Identity() * r;
         }; // Equal measurement noise on both coordinates
 
-        return objectDynamicContainer;
+        return object_dynamic_container;
     }
 
     template<typename T>
-    auto getInitialPosition(typename Meas<T>::Vec z, typename single_track_model::State<T>::Vec xVehicle) ->
+    auto get_initial_position(typename Meas<T>::Vec z, typename single_track_model::State<T>::Vec xVehicle) ->
             typename State<T>::Vec {
         Meas<T> object{z};
         single_track_model::State<T> vehicle{xVehicle};
-        State<T> newState{object.xPos * std::cos(vehicle.psi) - object.yPos * std::sin(vehicle.psi) + vehicle.xPos,
+        State<T> new_state{object.xPos * std::cos(vehicle.psi) - object.yPos * std::sin(vehicle.psi) + vehicle.xPos,
                        object.xPos * std::sin(vehicle.psi) + object.yPos * std::cos(vehicle.psi) + vehicle.yPos};
 
-        return newState.getVec();
+        return new_state.get_vec();
     }
 
     template<typename T>
-    auto getInitialCovariance(typename Meas<T>::Vec z, typename single_track_model::State<T>::Vec xVehicle,
+    auto get_initial_covariance(typename Meas<T>::Vec z, typename single_track_model::State<T>::Vec xVehicle,
                               typename single_track_model::State<T>::Mat pVehicle) -> typename State<T>::Mat {
         return pVehicle.block(0, 0, 2, 2);
     }
 
-} // namespace ekf_slam::constant_position_model
+} } // namespace ekf_slam::constant_position_model
 
 #endif // EKFSLAM_CONSTANTPOSITIONMODEL_HPP
