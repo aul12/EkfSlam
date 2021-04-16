@@ -10,13 +10,16 @@ int main() {
     feenableexcept(FE_INVALID | FE_OVERFLOW | FE_DIVBYZERO); // Floating point exceptions
     auto dt = 0.1;
 
-    ekf_slam::VehicleParams vehicleParams{1000, 1000, 1, 1};
-    ekf_slam::ObjectParams objectParams{1, 1};
+    ekf_slam::VehicleParams vehicleParams{1000, 1000, 100, 1};
+    ekf_slam::ObjectParams objectParams{0, 1};
     ekf_slam::Manager manager{vehicleParams, objectParams};
 
     std::vector<ekf_slam::Manager::ObjectState> cones;
-    cones.emplace_back(100, 2);
-    cones.emplace_back(100, -2);
+    for (auto c = 0; c < 100; c += 20) {
+        cones.emplace_back(c, 2);
+        cones.emplace_back(c, -2);
+    }
+
     ekf_slam::Manager::VehicleState vehicleState{0, 0, 0, 0, 0};
     auto f = ekf_slam::single_track_model::make<double>(dt, 0, 0, 0, 0).f;
     auto coneH = ekf_slam::constant_position_model::make<double>(0, 0).h;
@@ -62,9 +65,9 @@ int main() {
                   << "\tNumber of Objects\t"
                   << estimatedCones.size() << std::endl;
 
-        for (const auto &estimatedCone : estimatedCones) {
+        /*for (const auto &estimatedCone : estimatedCones) {
             std::cout << "\t[" << estimatedCone.xPos << ", " << estimatedCone.yPos << "]" << std::endl;
-        }
+        }*/
 
 
         using namespace std::chrono_literals;
