@@ -7,6 +7,7 @@
 #ifndef EKFSLAM_DYNAMICCONTAINER_HPP
 #define EKFSLAM_DYNAMICCONTAINER_HPP
 
+#include <Eigen/Eigen>
 #include <cstdint>
 
 namespace ekf_slam {
