@@ -102,27 +102,27 @@ namespace ekf_slam::single_track_model {
             // clang-format on
             Eigen::Matrix<T, 3, 3> Q_a = GammaA * GammaA.transpose() * sigmaA2;
             Eigen::Matrix<T, 2, 2> Q_DDPsi = GammaDDPsi * GammaDDPsi.transpose() * sigmaDDPsi2;
-            ASSERT_COV(Q_a);
-            ASSERT_COV(Q_DDPsi);
+            ASSERT_COV(Q_a)
+            ASSERT_COV(Q_DDPsi)
             Eigen::Matrix<T, 5, 5> Q = Eigen::Matrix<T, 5, 5>::Zero();
             Q.block(0, 0, 3, 3) = Q_a;
             Q.block(3, 3, 2, 2) = Q_DDPsi;
-
+            ASSERT_COV(Q)
             return Q;
         };
 
         vehicleDynamicContainer.h = [](auto x) -> typename Meas<T>::Vec {
             State<T> state{x};
-            Meas<T> meas{state.v, state.psi};
+            Meas<T> meas{state.v, state.dPsi};
             return meas.getVec();
         };
 
         vehicleDynamicContainer.j_h = [](auto x) -> Eigen::Matrix<T, Meas<T>::DIM, State<T>::DIM> {
             Eigen::Matrix<T, Meas<T>::DIM, State<T>::DIM> c = Eigen::Matrix<T, Meas<T>::DIM, State<T>::DIM>::Zero();
             c <<
-                    // clang-format off
-                    0, 0, 1, 0, 0,
-                    0, 0, 0, 0, 1;
+            // clang-format off
+                0, 0, 1, 0, 0,
+                0, 0, 0, 0, 1;
             // clang-format on
             return c;
         };
@@ -130,10 +130,11 @@ namespace ekf_slam::single_track_model {
         vehicleDynamicContainer.r_func = [sigmaV2, sigmaDPsi2]() -> typename Meas<T>::Mat {
             Eigen::Matrix<T, Meas<T>::DIM, Meas<T>::DIM> R = Eigen::Matrix<T, Meas<T>::DIM, Meas<T>::DIM>::Zero();
             R <<
-                    // clang-format off
-                    sigmaV2, 0,
-                    0, sigmaDPsi2;
+            // clang-format off
+                sigmaV2, 0,
+                0, sigmaDPsi2;
             // clang-format on
+            ASSERT_COV(R)
             return R;
         };
 
