@@ -88,7 +88,7 @@ namespace ekf_slam {
 
         // Actual prediction
         X last_x;
-        P lapt_p;
+        P last_p;
     };
 
     template<std::size_t VEHICLE_STATE_DIM, std::size_t VEHICLE_MEAS_DIM, std::size_t OBJECT_STATE_DIM,
@@ -102,7 +102,7 @@ namespace ekf_slam {
         initial_est_func{initialEstFunc},
         initial_cov_func{initialCovFunc},
         last_x{initialEst},
-        lapt_p{initialCov} {
+        last_p{initialCov} {
     }
 
     template<std::size_t VEHICLE_STATE_DIM, std::size_t VEHICLE_MEAS_DIM, std::size_t OBJECT_STATE_DIM,
@@ -110,13 +110,13 @@ namespace ekf_slam {
     void EKFSlam<VEHICLE_STATE_DIM, VEHICLE_MEAS_DIM, OBJECT_STATE_DIM, OBJECT_MEAS_DIM, T>::update(
             typename VehicleDynamic::Z vehicleMeasurement, ObjectMeasurements objectMeasurements) {
         // Predict all objects, independent of their visibility, this leads to an increase in covariance over time
-        std::tie(last_x, lapt_p) = predict(last_x, lapt_p);
+        std::tie(last_x, last_p) = predict(last_x, last_p);
 
         // The innovation step is combined with the track management
-        std::tie(last_x, lapt_p) = slam(last_x, lapt_p, vehicleMeasurement, objectMeasurements);
+        std::tie(last_x, last_p) = slam(last_x, last_p, vehicleMeasurement, objectMeasurements);
 
         // Just some plausibility checks
-        ASSERT_COV(lapt_p);
+        ASSERT_COV(last_p);
     }
 
     template<std::size_t VEHICLE_STATE_DIM, std::size_t VEHICLE_MEAS_DIM, std::size_t OBJECT_STATE_DIM,

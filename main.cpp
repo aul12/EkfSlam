@@ -55,7 +55,7 @@ auto main() -> int {
                 cones_measured.emplace_back(cone_local);
             }
         }
-
+        std::cout << cones_measured.size() << std::endl;
         auto result = manager.update(vehicle_meas, cones_measured, dt);
         ekf_slam::Manager::VehicleState vehicle = result.first;
         std::vector<ekf_slam::Manager::ObjectState> estimated_cones = result.second;
