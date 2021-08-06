@@ -41,7 +41,7 @@ namespace ekf_slam::constant_position_model {
                 objectDynamicContainer;
         objectDynamicContainer.f = [](auto x) -> typename State<T>::Vec { return x; }; // State remains the same
         objectDynamicContainer.j_f = [](auto x) ->
-                typename State<T>::Mat { return State<T>::Mat::Zero(); }; // Jacobian is zero
+                typename State<T>::Mat { return State<T>::Mat::Identity(); }; // Jacobian is identity
         objectDynamicContainer.q_func = [q](auto x) ->
                 typename State<T>::Mat { return State<T>::Mat::Identity() * q; }; // Equal noise on both coordinates
 

@@ -76,7 +76,7 @@ namespace ekf_slam::single_track_model {
             typename State<T>::Mat j_f;
             // clang-format off
             j_f <<
-                1, 0, std::cos(state.psi) * dt, -std::sin(state.psi) * state.v *dt, 0,
+                1, 0, std::cos(state.psi) * dt, -std::sin(state.psi) * state.v * dt, 0,
                 0, 1, std::sin(state.psi) * dt, std::cos(state.psi) * state.v * dt , 0,
                 0, 0, 1, 0, 0,
                 0, 0, 0, 1, dt,
