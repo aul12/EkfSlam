@@ -37,7 +37,7 @@ namespace ekf_slam {
                 ret(4) = dPsi;
                 return ret;
             }
-            
+
             auto get_psi() const -> T {
                 return this->psi;
             }
@@ -114,7 +114,7 @@ namespace ekf_slam {
                 typename State<T>::Mat j_f;
                 // clang-format off
                 j_f <<
-                    1, 0, std::cos(state.get_psi()) * dt, -std::sin(state.get_psi()) * state.get_v() *dt, 0,
+                    1, 0, std::cos(state.get_psi()) * dt, -std::sin(state.get_psi()) * state.get_v() * dt, 0,
                     0, 1, std::sin(state.get_psi()) * dt, std::cos(state.get_psi()) * state.get_v() * dt , 0,
                     0, 0, 1, 0, 0,
                     0, 0, 0, 1, dt,
@@ -146,13 +146,13 @@ namespace ekf_slam {
                         Eigen::Matrix<T, 5, 5> q = Eigen::Matrix<T, 5, 5>::Zero();
                         q.block(0, 0, 3, 3) = q_a;
                         q.block(3, 3, 2, 2) = q_dd_psi;
-
+                        ASSERT_COV(q)
                         return q;
                     };
 
             vehicle_dynamic_container.h = [](typename State<T>::Vec x) -> typename Meas<T>::Vec {
                 State<T> state{x};
-                Meas<T> meas{state.get_v(), state.get_psi()};
+                Meas<T> meas{state.get_v(), state.get_d_psi()};
                 return meas.get_vec();
             };
 
@@ -170,9 +170,11 @@ namespace ekf_slam {
             vehicle_dynamic_container.r_func = [sigmaV2, sigmaDPsi2]() -> typename Meas<T>::Mat {
                 Eigen::Matrix<T, Meas<T>::DIM, Meas<T>::DIM> r = Eigen::Matrix<T, Meas<T>::DIM, Meas<T>::DIM>::Zero();
                 // clang-format off
-                r <<    sigmaV2, 0,
+                r <<
+                        sigmaV2, 0,
                         0, sigmaDPsi2;
                 // clang-format on
+                ASSERT_COV(r)
                 return r;
             };
 

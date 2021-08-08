@@ -19,9 +19,8 @@ namespace ekf_slam {
         this->dt = delta_time;
         auto z_vehicle = vehicleMeas.get_vec();
         std::vector<ObjectMeas::Vec> z_object;
-        std::transform(
-                objectMeasurements.cbegin(), objectMeasurements.cend(), std::back_inserter(z_object),
-                [](ObjectMeas meas) -> ekf_slam::constant_position_model::State<T>::Vec { return meas.get_vec(); });
+        std::transform(objectMeasurements.cbegin(), objectMeasurements.cend(), std::back_inserter(z_object),
+                       [](const ObjectMeas &meas) { return meas.get_vec(); });
         ekf.update(z_vehicle, z_object);
 
         VehicleState vehicle_state{ekf.get_vehicle()};

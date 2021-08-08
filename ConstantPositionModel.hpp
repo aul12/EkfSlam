@@ -55,7 +55,7 @@ namespace ekf_slam {
             object_dynamic_container.f = [](typename State<T>::Vec x) ->
                     typename State<T>::Vec { return x; }; // State remains the same
             object_dynamic_container.j_f = [](typename State<T>::Vec /*x*/) ->
-                    typename State<T>::Mat { return State<T>::Mat::Zero(); }; // Jacobian is zero
+                    typename State<T>::Mat { return State<T>::Mat::Identity(); }; // Jacobian is Identity
             object_dynamic_container.q_func = [q](typename State<T>::Vec /*x*/) ->
                     typename State<T>::Mat { return State<T>::Mat::Identity() * q; }; // Equal noise on both coordinates
 
