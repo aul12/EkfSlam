@@ -1,5 +1,5 @@
 /**
- * @file DynamicContainer.hpp.h
+ * @file DynamicContainer.hpp
  * @author paul
  * @date 17.03.21
  * Description here TODO

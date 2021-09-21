@@ -1,5 +1,5 @@
 /**
- * @file SingleTrackModel.hpp.h
+ * @file SingleTrackModel.hpp
  * @author paul
  * @date 17.03.21
  * Description here TODO
