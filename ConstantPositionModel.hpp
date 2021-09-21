@@ -1,5 +1,5 @@
 /**
- * @file ConstantPositionModel.hpp
+ * @headerfile ConstantPositionModel.hpp
  * @author paul
  * @date 17.03.21
  * Description here TODO
