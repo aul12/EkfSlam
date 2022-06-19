@@ -7,9 +7,9 @@
 #ifndef EKFSLAM_EKFSLAMMANAGER_HPP
 #define EKFSLAM_EKFSLAMMANAGER_HPP
 
-#include "ConstantPositionModel.hpp"
 #include "EkfSlam.hpp"
-#include "SingleTrackModel.hpp"
+#include "models/ConstantPositionModel.hpp"
+#include "models/SingleTrackModel.hpp"
 
 namespace ekf_slam {
     struct VehicleParams {
@@ -23,23 +23,21 @@ namespace ekf_slam {
     class Manager {
       public:
         using T = double;
-        using VehicleState = single_track_model::State<T>;
-        using VehicleMeas = single_track_model::Meas<T>;
-        using ObjectState = constant_position_model::State<T>;
-        using ObjectMeas = constant_position_model::Meas<T>;
+        using Vehicle = models::single_track<T>;
+        using Object = models::constant_position<T>;
 
-        using EKF = EKFSlam<VehicleState::DIM, VehicleMeas::DIM, ObjectState::DIM, ObjectMeas::DIM, T>;
+        using EKF = EKFSlam<Vehicle::State::DIM, Vehicle::Meas::DIM, Object::State::DIM, Object::Meas::DIM, T>;
 
         Manager(VehicleParams vehicleParams, ObjectParams objectParams);
 
-        auto update(VehicleMeas vehicleMeas, const std::vector<ObjectMeas> &objectMeasurements, double dt) ->
-                std::pair<VehicleState, std::vector<ObjectState>>;
+        auto update(Vehicle::Meas vehicleMeas, const std::vector<Object::Meas> &objectMeasurements, double dt)
+                -> std::pair<Vehicle::State, std::vector<Object::State>>;
 
       private:
         double dt;
         EKF ekf;
     };
-}
+} // namespace ekf_slam
 
 
 #endif // EKFSLAM_EKFSLAMMANAGER_HPP

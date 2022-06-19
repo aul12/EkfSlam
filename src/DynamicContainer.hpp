@@ -7,7 +7,9 @@
 #ifndef EKFSLAM_DYNAMICCONTAINER_HPP
 #define EKFSLAM_DYNAMICCONTAINER_HPP
 
+#include <Eigen/Eigen>
 #include <cstdint>
+#include <functional>
 
 namespace ekf_slam {
     template<std::size_t STATE_DIM, std::size_t MEAS_DIM, typename T>
