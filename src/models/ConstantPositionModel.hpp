@@ -36,6 +36,9 @@ namespace ekf_slam::models {
 
         using Meas = State;
 
+        struct Params {
+            T sigmaPos2, sigmaMeas;
+        };
 
         static auto make(T q, T r) {
             ObjectDynamicContainer<State::DIM, Meas::DIM, single_track<T>::State::DIM, T> objectDynamicContainer;

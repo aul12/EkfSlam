@@ -59,6 +59,10 @@ namespace ekf_slam::models {
             }
         };
 
+        struct Params {
+            T sigmaA2, sigmaDDPsi2, sigmaV2, sigmaDPsi2;
+        };
+
         static auto make(const T &dt, T sigmaA2, T sigmaDDPsi2, T sigmaV2, T sigmaDPsi2) {
             VehicleDynamicContainer<State::DIM, Meas::DIM, T> vehicleDynamicContainer;
             vehicleDynamicContainer.f = [&dt](auto x) -> typename State::Vec {

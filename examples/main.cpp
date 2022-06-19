@@ -25,17 +25,17 @@ int main() {
     feenableexcept(FE_INVALID | FE_OVERFLOW | FE_DIVBYZERO); // Floating point exceptions
     auto dt = 0.01;
 
-    ekf_slam::VehicleParams vehicleParams{1000000, 1000000, 0.000001, 0.000001};
-    ekf_slam::ObjectParams objectParams{0.1, 0.000001};
+    ekf_slam::Manager<>::Vehicle::Params vehicleParams{1000000, 1000000, 0.000001, 0.000001};
+    ekf_slam::Manager<>::Object::Params objectParams{0.1, 0.000001};
     ekf_slam::Manager manager{vehicleParams, objectParams};
 
-    std::vector<ekf_slam::Manager::Object::State> cones;
+    std::vector<ekf_slam::Manager<>::Object::State> cones;
     for (auto c = 0; c < 100; c += 5) {
         cones.emplace_back(c, 2);
         cones.emplace_back(c, -2);
     }
 
-    ekf_slam::Manager::Vehicle::State vehicleState{0, 0, 0, 0, 0};
+    ekf_slam::Manager<>::Vehicle::State vehicleState{0, 0, 0, 0, 0};
     auto f = ekf_slam::models::single_track<double>::make(dt, 0, 0, 0, 0).f;
     auto coneH = ekf_slam::models::constant_position<double>::make(0, 0).h;
 
@@ -61,12 +61,12 @@ int main() {
     for (std::size_t c = 0; c < 15; ++c) {
         vehicleState.dPsi += ddPsi(c * dt);
         vehicleState.v += a(c * dt);
-        vehicleState = ekf_slam::Manager::Vehicle::State(f(vehicleState.getVec()));
-        ekf_slam::Manager::Vehicle::Meas vehicleMeas{vehicleState.v, vehicleState.dPsi};
+        vehicleState = ekf_slam::Manager<>::Vehicle::State(f(vehicleState.getVec()));
+        ekf_slam::Manager<>::Vehicle::Meas vehicleMeas{vehicleState.v, vehicleState.dPsi};
 
-        std::vector<ekf_slam::Manager::Object::Meas> conesMeasured;
+        std::vector<ekf_slam::Manager<>::Object::Meas> conesMeasured;
         for (auto cone : cones) {
-            auto coneLocal = ekf_slam::Manager::Object::Meas{coneH(cone.getVec(), vehicleState.getVec())};
+            auto coneLocal = ekf_slam::Manager<>::Object::Meas{coneH(cone.getVec(), vehicleState.getVec())};
             if (coneLocal.xPos > 0 and coneLocal.xPos < 30) { // In front of the vehicle, max 10m
                 conesMeasured.emplace_back(coneLocal);
             }
