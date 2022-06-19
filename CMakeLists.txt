@@ -1,17 +1,11 @@
-cmake_minimum_required(VERSION 3.17)
+cmake_minimum_required(VERSION 3.11)
+
 project(EKFSlam)
-
-find_package(Eigen3 3.3 REQUIRED NO_MODULE)
-
 set(CMAKE_CXX_STANDARD 20)
 
-add_library(${PROJECT_NAME} STATIC EkfSlamManager.cpp Util.cpp)
-target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_SOURCE_DIR})
-target_link_libraries(${PROJECT_NAME} Eigen3::Eigen)
+add_subdirectory(src)
 
-option(ekf_examples "Build example for EKF Slam" ON)
-
-if (${ekf_examples})
-    add_executable(main.cpp main.cpp)
-    target_link_libraries(main.cpp ${PROJECT_NAME})
+option(BUILD_EXAMPLES "Build examples" ON)
+if (${BUILD_EXAMPLES})
+    add_subdirectory(examples)
 endif ()
