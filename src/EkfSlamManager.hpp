@@ -1,5 +1,5 @@
 /**
- * @file EkfSlamManager.hpp.h
+ * @headerfile EkfSlamManager.hpp
  * @author paul
  * @date 17.03.21
  * Description here TODO
