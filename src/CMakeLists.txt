@@ -6,7 +6,7 @@ else ()
     FetchContent_Declare(
             eigen
             GIT_REPOSITORY "https://gitlab.com/libeigen/eigen"
-            GIT_TAG "3.4.0" # Do not change or upgrade both Eigen 3.4 and master are broken
+            GIT_TAG "3.3.7" # Do not change or upgrade both Eigen 3.4 and master are broken
     )
     FetchContent_Populate(eigen)
 endif ()

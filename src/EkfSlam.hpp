@@ -146,6 +146,8 @@ namespace ekf_slam {
         // P_hat = dF * P * dF^T + q
         auto df = getdf(x);
         auto q = getQ(x);
+        ASSERT_COV(q);
+        ASSERT_COV(p);
         p = df * p * df.transpose() + q;
         ASSERT_COV(p);
 
@@ -190,6 +192,26 @@ namespace ekf_slam {
 
         auto associationResult = associationFunc(trackMeasurements, measurements);
 
+        /*
+         * Example 3 tracks, 3 measurements:
+         *
+         * Association (Track -> Meas)
+         * 1 -> 3
+         * 2 -> 2
+         *
+         * no measurement for track 3
+         *
+         * new track for measurement 1
+         *
+         * Initial: z=(m1, m2, m3), z_hat=(t1, t2, t3)
+         *
+         * After removal of non-associated: z=(m1, m2, m3), z_hat=(t1, t2)
+         *
+         *
+         */
+
+        // @TODO delete tracks
+
         // Find tracks not associated
         std::set<std::size_t> associatedTracks;
         for (const auto &[track, _] : associationResult.track2Measure) {
@@ -226,10 +248,10 @@ namespace ekf_slam {
 
 
         // Reorder measurements to match tracks and only include associated measurements
-        ObjectMeasurements reorderedMeasurements(associatedTracks.size());
+        ObjectMeasurements reorderedMeasurements;
         for (auto track : associatedTracks) {
             auto meas = associationResult.track2Measure[track];
-            reorderedMeasurements[track] = measurements[meas];
+            reorderedMeasurements.emplace_back(measurements[meas]);
         }
 
 
@@ -237,7 +259,7 @@ namespace ekf_slam {
         Z z(VEHICLE_MEAS_DIM + reorderedMeasurements.size() * OBJECT_MEAS_DIM);
         z.block(0, 0, VEHICLE_MEAS_DIM, 1) = vehicleMeas;
         for (auto c = 0U; c < reorderedMeasurements.size(); ++c) {
-            z.block(VEHICLE_MEAS_DIM + c * OBJECT_MEAS_DIM, 0, OBJECT_MEAS_DIM, 1) = reorderedMeasurements[c];
+            z.template block<OBJECT_MEAS_DIM, 1>(VEHICLE_MEAS_DIM + c * OBJECT_MEAS_DIM, 0) = reorderedMeasurements[c];
         }
 
         // Calculate Kalman Gain

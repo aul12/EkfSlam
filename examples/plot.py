@@ -1,4 +1,3 @@
-import matplotlib
 import json
 
 import matplotlib.pyplot as plt
