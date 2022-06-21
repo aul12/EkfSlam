@@ -210,8 +210,6 @@ namespace ekf_slam {
          *
          */
 
-        // @TODO delete tracks
-
         // Find tracks not associated
         std::set<std::size_t> associatedTracks;
         for (const auto &[track, _] : associationResult.track2Measure) {
@@ -225,10 +223,20 @@ namespace ekf_slam {
 
         // Remove tracks not associated
         for (auto i = 0U; i < numObjects(x); ++i) {
-            if (not associatedTracks.contains(i)) {
+            bool trackToDelete = false;
+            for (auto toDelete : associationResult.tracksToDelete) {
+                if (toDelete == i) {
+                    trackToDelete = true;
+                    break;
+                }
+            }
+
+            if (not associatedTracks.contains(i) or trackToDelete) {
                 auto offset = VEHICLE_STATE_DIM + i * OBJECT_STATE_DIM;
-                invisibleObjects.emplace_back(x_o(x, i),
-                                              p.template block<OBJECT_STATE_DIM, OBJECT_STATE_DIM>(offset, offset));
+                if (not trackToDelete) {
+                    invisibleObjects.emplace_back(x_o(x, i),
+                                                  p.template block<OBJECT_STATE_DIM, OBJECT_STATE_DIM>(offset, offset));
+                }
 
                 if (i != lastIndex) {
                     auto lastOffset = VEHICLE_STATE_DIM + lastIndex * OBJECT_STATE_DIM;
