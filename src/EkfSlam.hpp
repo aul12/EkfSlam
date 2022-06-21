@@ -11,11 +11,21 @@
 #include <cstdint>
 #include <iostream>
 #include <numeric>
+#include <set>
 
 #include "DynamicContainer.hpp"
 #include "Util.hpp"
 
 namespace ekf_slam {
+    struct AssociationResult {
+        using TrackId = std::size_t;
+        using MeasId = std::size_t;
+
+        std::map<TrackId, MeasId> track2Measure;
+        std::vector<MeasId> newTracks;
+        std::vector<TrackId> tracksToDelete;
+    };
+
     template<std::size_t VEHICLE_STATE_DIM, std::size_t VEHICLE_MEAS_DIM, std::size_t OBJECT_STATE_DIM,
              std::size_t OBJECT_MEAS_DIM, typename T>
     class EKFSlam {
@@ -41,12 +51,21 @@ namespace ekf_slam {
                 std::function<auto(typename ObjectDynamic::Z, typename VehicleDynamic::X, typename VehicleDynamic::P)
                                       ->typename ObjectDynamic::P>; // R is added separately
 
+        /*
+         * Tracks + Covariance and Measurements -> Association
+         */
+        using AssociationFunc =
+                std::function<auto(const std::vector<std::pair<typename ObjectDynamic::Z, typename ObjectDynamic::R>> &,
+                                   const std::vector<typename ObjectDynamic::Z> &)
+                                      ->AssociationResult>;
+
         // Functions to be used by user
         EKFSlam(VehicleDynamic vehicleDynamic, ObjectDynamic objectDynamic, InitialEstFunc initialEstFunc,
                 InitialCovFunc initialCovFunc, typename VehicleDynamic::X initialEst = VehicleDynamic::X::Zero(),
                 typename VehicleDynamic::P initialCov = VehicleDynamic::P::Identity());
 
-        void update(typename VehicleDynamic::Z vehicleMeasurement, ObjectMeasurements objectMeasurements);
+        void update(typename VehicleDynamic::Z vehicleMeasurement, ObjectMeasurements objectMeasurements,
+                    AssociationFunc associationFunc);
 
         auto getVehicle() const -> typename VehicleDynamic::X;
 
@@ -59,16 +78,8 @@ namespace ekf_slam {
 
         [[nodiscard]] auto measure(X x, P p) const -> std::pair<Z, S>;
 
-        auto slam(X x, P p, typename VehicleDynamic::Z vehicleMeas, ObjectMeasurements measurements) const
-                -> std::pair<X, P>;
-
-        auto addTracks(X x, P p, typename VehicleDynamic::Z vehicleMeas, ObjectMeasurements measurements) const
-                -> std::pair<X, P>;
-
-        auto separateTracksNotMeasured(X x, P p, ObjectMeasurements objectMeasurements) const
-                -> std::tuple<X, P, TrackList>;
-
-        auto dataAssociation(Z z, S s, ObjectMeasurements measurements) const -> std::map<std::size_t, std::size_t>;
+        auto slam(X x, P p, typename VehicleDynamic::Z vehicleMeas, ObjectMeasurements measurements,
+                  AssociationFunc associationFunc) const -> std::pair<X, P>;
 
         // Helper functions single objects <-> vector conversion
         auto getdf(const X &x) const;
@@ -110,12 +121,13 @@ namespace ekf_slam {
     template<std::size_t VEHICLE_STATE_DIM, std::size_t VEHICLE_MEAS_DIM, std::size_t OBJECT_STATE_DIM,
              std::size_t OBJECT_MEAS_DIM, typename T>
     void EKFSlam<VEHICLE_STATE_DIM, VEHICLE_MEAS_DIM, OBJECT_STATE_DIM, OBJECT_MEAS_DIM, T>::update(
-            typename VehicleDynamic::Z vehicleMeasurement, ObjectMeasurements objectMeasurements) {
+            typename VehicleDynamic::Z vehicleMeasurement, ObjectMeasurements objectMeasurements,
+            AssociationFunc associationFunc) {
         // Predict all objects, independent of their visibility, this leads to an increase in covariance over time
         std::tie(lastX, lastP) = predict(lastX, lastP);
 
         // The innovation step is combined with the track management
-        std::tie(lastX, lastP) = slam(lastX, lastP, vehicleMeasurement, objectMeasurements);
+        std::tie(lastX, lastP) = slam(lastX, lastP, vehicleMeasurement, objectMeasurements, associationFunc);
 
         // Just some plausibility checks
         ASSERT_COV(lastP);
@@ -163,28 +175,63 @@ namespace ekf_slam {
     template<std::size_t VEHICLE_STATE_DIM, std::size_t VEHICLE_MEAS_DIM, std::size_t OBJECT_STATE_DIM,
              std::size_t OBJECT_MEAS_DIM, typename T>
     auto EKFSlam<VEHICLE_STATE_DIM, VEHICLE_MEAS_DIM, OBJECT_STATE_DIM, OBJECT_MEAS_DIM, T>::slam(
-            X x, P p, typename VehicleDynamic::Z vehicleMeas, ObjectMeasurements measurements) const
-            -> std::pair<X, P> {
-
-        // New Tracks
-        std::tie(x, p) = addTracks(x, p, vehicleMeas, measurements);
-
-        // Temporary remove tracks not visible
-        TrackList invisibleObjects;
-        std::tie(x, p, invisibleObjects) = separateTracksNotMeasured(x, p, measurements);
-
-        assert(numObjects(x) == measurements.size());
+            X x, P p, typename VehicleDynamic::Z vehicleMeas, ObjectMeasurements measurements,
+            AssociationFunc associationFunc) const -> std::pair<X, P> {
 
         auto [z_hat, s] = measure(x, p);
 
-        // Data association
-        auto associationMap = dataAssociation(z_hat, s, measurements);
-
-        // Reorder z to match x
-        ObjectMeasurements reorderedMeasurements(measurements.size());
-        for (auto c = 0U; c < measurements.size(); ++c) {
-            reorderedMeasurements[c] = measurements[associationMap[c]];
+        std::vector<std::pair<typename ObjectDynamic::Z, typename ObjectDynamic::R>> trackMeasurements;
+        for (auto c = 0U; c < numObjects(x); ++c) {
+            auto offset = VEHICLE_MEAS_DIM + c * OBJECT_MEAS_DIM;
+            auto meas = z_hat.template block<OBJECT_MEAS_DIM, 1>(offset, 0);
+            auto cov = s.template block<OBJECT_MEAS_DIM, OBJECT_MEAS_DIM>(offset, offset);
+            trackMeasurements.emplace_back(meas, cov);
         }
+
+        auto associationResult = associationFunc(trackMeasurements, measurements);
+
+        // Find tracks not associated
+        std::set<std::size_t> associatedTracks;
+        for (const auto &[track, _] : associationResult.track2Measure) {
+            associatedTracks.emplace(track);
+        }
+
+        // Only stored the covariance of the invisible object not the relation to other objects and especially
+        // the vehicle. Not optimal, but probably works
+        std::vector<std::pair<typename ObjectDynamic::X, typename ObjectDynamic::P>> invisibleObjects;
+        auto lastIndex = numObjects(x) - 1;
+
+        // Remove tracks not associated
+        for (auto i = 0U; i < numObjects(x); ++i) {
+            if (not associatedTracks.contains(i)) {
+                auto offset = VEHICLE_STATE_DIM + i * OBJECT_STATE_DIM;
+                invisibleObjects.emplace_back(x_o(x, i),
+                                              p.template block<OBJECT_STATE_DIM, OBJECT_STATE_DIM>(offset, offset));
+
+                if (i != lastIndex) {
+                    auto lastOffset = VEHICLE_STATE_DIM + lastIndex * OBJECT_STATE_DIM;
+                    x.block(offset, 0, OBJECT_STATE_DIM, 1) = x.block(lastOffset, 0, OBJECT_STATE_DIM, 1);
+                    p.block(offset, 0, OBJECT_STATE_DIM, p.cols()) = p.block(lastOffset, 0, OBJECT_STATE_DIM, p.cols());
+                    p.block(0, offset, p.rows(), OBJECT_STATE_DIM) = p.block(0, lastOffset, p.rows(), OBJECT_STATE_DIM);
+                }
+                lastIndex -= 1;
+            }
+        }
+        auto size = VEHICLE_STATE_DIM + (lastIndex + 1) * OBJECT_STATE_DIM;
+        x.conservativeResize(size);
+        p.conservativeResize(size, size);
+
+        // Update track-measurement vector based on reduced state vector
+        std::tie(z_hat, s) = measure(x, p);
+
+
+        // Reorder measurements to match tracks and only include associated measurements
+        ObjectMeasurements reorderedMeasurements(associatedTracks.size());
+        for (auto track : associatedTracks) {
+            auto meas = associationResult.track2Measure[track];
+            reorderedMeasurements[track] = measurements[meas];
+        }
+
 
         // Build Z Vector
         Z z(VEHICLE_MEAS_DIM + reorderedMeasurements.size() * OBJECT_MEAS_DIM);
@@ -202,218 +249,36 @@ namespace ekf_slam {
         p = p - K * s * K.transpose();
         ASSERT_COV(p);
 
-        // Readd tracks
-        X completeX = X::Zero(x.size() + invisibleObjects.size() * OBJECT_STATE_DIM);
-        P completeP = P::Zero(p.rows() + invisibleObjects.size() * OBJECT_STATE_DIM,
-                              p.cols() + invisibleObjects.size() * OBJECT_STATE_DIM);
+        // Readd tracks and add new track
+        auto newSize = x.size() + (invisibleObjects.size() + associationResult.newTracks.size()) * OBJECT_STATE_DIM;
+        X completeX = X::Zero(newSize);
+        P completeP = P::Zero(newSize, newSize);
         completeX.block(0, 0, x.size(), 1) = x;
         completeP.block(0, 0, p.rows(), p.cols()) = p;
+        // Readd tracks
         for (auto c = 0U; c < invisibleObjects.size(); ++c) {
             auto offset = x.size() + c * OBJECT_STATE_DIM;
             completeX.block(offset, 0, OBJECT_STATE_DIM, 1) = invisibleObjects[c].first;
             completeP.block(offset, offset, OBJECT_STATE_DIM, OBJECT_STATE_DIM) = invisibleObjects[c].second;
         }
 
+        // New tracks
+        for (auto c = 0U; c < associationResult.newTracks.size(); ++c) {
+            auto offset = x.size() + invisibleObjects.size() * OBJECT_STATE_DIM + c * OBJECT_STATE_DIM;
+
+            auto initialEstimate = initialEstFunc(measurements[c], x_v(x));
+            Mat initialCov =
+                    initialCovFunc(measurements[c], x_v(x), p.block(0, 0, VEHICLE_STATE_DIM, VEHICLE_STATE_DIM)) +
+                    vehicleDynamic.r_func();
+
+
+            completeX.block(offset, 0, OBJECT_STATE_DIM, 1) = initialEstimate;
+            completeP.block(offset, offset, OBJECT_STATE_DIM, OBJECT_STATE_DIM) = initialCov;
+        }
+
         ASSERT_COV(completeP);
 
         return std::make_pair(completeX, completeP);
-    }
-
-    template<std::size_t VEHICLE_STATE_DIM, std::size_t VEHICLE_MEAS_DIM, std::size_t OBJECT_STATE_DIM,
-             std::size_t OBJECT_MEAS_DIM, typename T>
-    auto EKFSlam<VEHICLE_STATE_DIM, VEHICLE_MEAS_DIM, OBJECT_STATE_DIM, OBJECT_MEAS_DIM, T>::addTracks(
-            X x, P p, typename VehicleDynamic::Z vehicleMeas, ObjectMeasurements measurements) const
-            -> std::pair<X, P> {
-        auto [z_hat, s] = measure(x, p);
-
-        // We do not update in place as this can result in missing cones if a new cone can be matched to two
-        // measurements
-        X updatedX = x;
-        P updatedP = p;
-
-        for (const auto &z : measurements) {
-            auto minMhd = std::numeric_limits<T>::max();
-            for (auto c = 0U; c < numObjects(x); ++c) {
-                auto offset = VEHICLE_MEAS_DIM + c * OBJECT_MEAS_DIM;
-                auto z_track = z_hat.block(offset, 0, OBJECT_MEAS_DIM, 1);
-                S cov = s.block(offset, offset, OBJECT_MEAS_DIM, OBJECT_MEAS_DIM);
-                auto z_tilde = z_track - z;
-
-                ASSERT_COV(cov);
-
-                auto mhd2 = z_tilde.transpose() * cov.inverse() * z_tilde;
-                assert(mhd2.rows() == 1 and mhd2.cols() == 1);
-                auto mhd = std::sqrt(mhd2(0, 0));
-
-                if (mhd < minMhd) {
-                    minMhd = mhd;
-                }
-            }
-
-            if (minMhd > gate) {
-                auto initialEstimate = initialEstFunc(z, x_v(x));
-                Mat initialCov = initialCovFunc(z, x_v(x), p.block(0, 0, VEHICLE_STATE_DIM, VEHICLE_STATE_DIM)) +
-                                 vehicleDynamic.r_func();
-
-                ASSERT_COV(initialCov);
-
-                X extendedX = X::Zero(updatedX.size() + OBJECT_STATE_DIM);
-                P extendedP = P::Zero(updatedP.rows() + OBJECT_STATE_DIM, updatedP.cols() + OBJECT_STATE_DIM);
-                extendedX.block(0, 0, updatedX.size(), 1) = updatedX;
-                extendedX.block(updatedX.size(), 0, OBJECT_STATE_DIM, 1) = initialEstimate;
-                extendedP.block(0, 0, updatedX.size(), updatedX.size()) = updatedP;
-                extendedP.block(updatedX.size(), updatedX.size(), OBJECT_STATE_DIM, OBJECT_STATE_DIM) = initialCov;
-
-                updatedX = extendedX;
-                updatedP = extendedP;
-                ASSERT_COV(updatedP);
-                // std::tie(z_hat, s) = measure(x, p);
-            }
-        }
-
-        return std::make_pair(updatedX, updatedP);
-    }
-
-    template<std::size_t VEHICLE_STATE_DIM, std::size_t VEHICLE_MEAS_DIM, std::size_t OBJECT_STATE_DIM,
-             std::size_t OBJECT_MEAS_DIM, typename T>
-    auto EKFSlam<VEHICLE_STATE_DIM, VEHICLE_MEAS_DIM, OBJECT_STATE_DIM, OBJECT_MEAS_DIM, T>::separateTracksNotMeasured(
-            EKFSlam::X x, EKFSlam::P p, ObjectMeasurements objectMeasurements) const -> std::tuple<X, P, TrackList> {
-
-        auto [z_hat, s] = measure(x, p);
-
-        std::vector<std::pair<typename ObjectDynamic::X, typename ObjectDynamic::P>> invisibleObjects;
-        for (auto c = 0U; c < numObjects(x); ++c) {
-            auto minMhd = std::numeric_limits<T>::max();
-
-            for (const auto &z_o : objectMeasurements) {
-                auto offset = VEHICLE_MEAS_DIM + c * OBJECT_MEAS_DIM;
-                auto z_track = z_hat.block(offset, 0, OBJECT_MEAS_DIM, 1);
-                auto cov = s.block(offset, offset, OBJECT_MEAS_DIM, OBJECT_MEAS_DIM);
-                auto z_tilde = z_track - z_o;
-
-                auto mhd2 = z_tilde.transpose() * cov.inverse() * z_tilde;
-                assert(mhd2.rows() == 1 and mhd2.cols() == 1);
-                auto mhd = std::sqrt(mhd2(0, 0));
-
-                if (mhd < minMhd) {
-                    minMhd = mhd;
-                }
-            }
-
-            if (minMhd > gate) {
-                auto offset = VEHICLE_STATE_DIM + c * OBJECT_STATE_DIM;
-                auto x_track = x.block(offset, 0, OBJECT_STATE_DIM, 1);
-                auto p_track = p.block(offset, offset, OBJECT_STATE_DIM, OBJECT_STATE_DIM);
-
-                ASSERT_COV(p_track);
-
-                invisibleObjects.emplace_back(x_track, p_track);
-
-                // Swap with last track
-                auto lastIndex = numObjects(x) - 1;
-                if (c != lastIndex) {
-                    auto lastOffset = VEHICLE_STATE_DIM + lastIndex * OBJECT_STATE_DIM;
-                    x.block(offset, 0, OBJECT_STATE_DIM, 1) = x.block(lastOffset, 0, OBJECT_STATE_DIM, 1);
-                    p.block(offset, 0, OBJECT_STATE_DIM, p.cols()) = p.block(lastOffset, 0, OBJECT_STATE_DIM, p.cols());
-                    p.block(0, offset, p.rows(), OBJECT_STATE_DIM) = p.block(0, lastOffset, p.rows(), OBJECT_STATE_DIM);
-                }
-
-                // Remove last track
-                x.conservativeResize(x.size() - OBJECT_STATE_DIM);
-                p.conservativeResize(p.rows() - OBJECT_STATE_DIM, p.cols() - OBJECT_STATE_DIM);
-                ASSERT_COV(p);
-                std::tie(z_hat, s) = measure(x, p);
-
-                // We eliminated this track, thus we now need to check the track at this index (the following track)
-                // again
-                c -= 1;
-            }
-        }
-
-        return std::make_tuple(x, p, invisibleObjects);
-    }
-
-    template<std::size_t VEHICLE_STATE_DIM, std::size_t VEHICLE_MEAS_DIM, std::size_t OBJECT_STATE_DIM,
-             std::size_t OBJECT_MEAS_DIM, typename T>
-    auto EKFSlam<VEHICLE_STATE_DIM, VEHICLE_MEAS_DIM, OBJECT_STATE_DIM, OBJECT_MEAS_DIM, T>::dataAssociation(
-            Z z_hat, S s, ObjectMeasurements measurements) const -> std::map<std::size_t, std::size_t> {
-        // i is track, j is measurement
-        Mat associationMatrix{measurements.size(), measurements.size()};
-
-        const auto epsilon = 1 / (z_hat.size() + 1.);
-
-        for (auto i = 0U; i < measurements.size(); ++i) {
-            for (auto j = 0U; j < measurements.size(); ++j) {
-                auto offset = VEHICLE_MEAS_DIM + i * OBJECT_MEAS_DIM;
-                auto z_track = z_hat.block(offset, 0, OBJECT_MEAS_DIM, 1);
-                auto cov = s.block(offset, offset, OBJECT_MEAS_DIM, OBJECT_MEAS_DIM);
-                auto z_tilde = z_track - measurements[j];
-
-                ASSERT_COV(cov);
-
-                auto mhd2 = z_tilde.transpose() * cov.inverse() * z_tilde;
-
-                assert(mhd2.rows() == 1 and mhd2.cols() == 1);
-
-                associationMatrix(i, j) = gate - mhd2(0, 0);
-            }
-        }
-
-        // Auction algorithm
-        std::vector<T> trackPrices(measurements.size());
-        std::vector<bool> observationMapped(measurements.size());
-
-        // track index -> measurement index
-        std::map<std::size_t, std::size_t> map;
-
-        auto count = 0U;
-        while (true) {
-            ++count;
-            auto allMapped = std::reduce(observationMapped.cbegin(), observationMapped.cend(), true,
-                                         [](auto a, auto b) { return a and b; });
-            if (allMapped) {
-                break;
-            }
-
-            std::size_t j = 0;
-            for (; j < measurements.size(); ++j) {
-                if (not observationMapped[j]) {
-                    break;
-                }
-            }
-
-            auto iMax = 0;
-            auto maxVal = std::numeric_limits<T>::lowest();
-
-            for (auto i = 0U; i < measurements.size(); ++i) {
-                auto val = associationMatrix(i, j) - trackPrices[i];
-                if (val > maxVal) {
-                    iMax = i;
-                    maxVal = val;
-                }
-            }
-
-            if (map.find(iMax) != map.cend()) {
-                observationMapped[map[iMax]] = false;
-            }
-            map[iMax] = j;
-
-            auto secondIMax = 0;
-            auto secondVal = std::numeric_limits<T>::lowest();
-
-            for (auto i = 0U; i < measurements.size(); ++i) {
-                auto val = associationMatrix(i, j) - trackPrices[i];
-                if (val > secondVal and secondIMax != iMax) {
-                    secondIMax = i;
-                    secondVal = val;
-                }
-            }
-            auto y_i = maxVal - secondVal;
-            trackPrices[iMax] += y_i + epsilon;
-            observationMapped[j] = true;
-        }
-
-        return map;
     }
 
     template<std::size_t VEHICLE_STATE_DIM, std::size_t VEHICLE_MEAS_DIM, std::size_t OBJECT_STATE_DIM,

@@ -23,7 +23,7 @@ namespace nlohmann {
 
 int main() {
     feenableexcept(FE_INVALID | FE_OVERFLOW | FE_DIVBYZERO); // Floating point exceptions
-    auto dt = 0.01;
+    auto dt = 0.1;
 
     ekf_slam::Manager<>::Vehicle::Params vehicleParams{1000000, 1000000, 0.000001, 0.000001};
     ekf_slam::Manager<>::Object::Params objectParams{0.1, 0.000001};
@@ -58,7 +58,7 @@ int main() {
     };
 
     nlohmann::json json;
-    for (std::size_t c = 0; c < 15; ++c) {
+    for (std::size_t c = 0; c < 150; ++c) {
         vehicleState.dPsi += ddPsi(c * dt);
         vehicleState.v += a(c * dt);
         vehicleState = ekf_slam::Manager<>::Vehicle::State(f(vehicleState.getVec()));

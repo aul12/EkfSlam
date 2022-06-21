@@ -8,6 +8,7 @@
 #define EKFSLAM_EKFSLAMMANAGER_HPP
 
 #include "EkfSlam.hpp"
+#include "association/BasicAssociation.hpp"
 #include "models/ConstantPositionModel.hpp"
 #include "models/SingleTrackModel.hpp"
 
@@ -37,7 +38,7 @@ namespace ekf_slam {
             std::vector<typename Object::Meas::Vec> z_object;
             std::transform(objectMeasurements.cbegin(), objectMeasurements.cend(), std::back_inserter(z_object),
                            [](const typename Object::Meas &meas) { return meas.getVec(); });
-            ekf.update(z_vehicle, z_object);
+            ekf.update(z_vehicle, z_object, association::basic_association<Object::Meas::DIM, T>);
 
             typename Vehicle::State vehicleState{ekf.getVehicle()};
             std::vector<typename Object::State> objects;

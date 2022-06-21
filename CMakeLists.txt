@@ -6,6 +6,8 @@ set(CMAKE_CXX_STANDARD 20)
 add_subdirectory(src)
 
 option(BUILD_EXAMPLES "Build examples" ON)
+option(USE_INSTALLED_EIGEN "Do not download Eigen, use already installed version" ON)
+
 if (${BUILD_EXAMPLES})
     add_subdirectory(examples)
 endif ()
