@@ -9,6 +9,7 @@ def add_marker(obj, fig, marker, color):
     plt.plot(obj[0][0], obj[0][1], marker, color=color)
 
 
+c = 0
 for snapshot in j:
     fig = plt.figure()
     add_marker(snapshot["vehicle"]["state"], fig, "x", "black")
@@ -21,4 +22,5 @@ for snapshot in j:
             add_marker(cone, fig, "o", "blue")
 
     plt.gca().axis("equal")
-    plt.show()
+    plt.savefig(f"out/{c}.png")
+    c += 1
