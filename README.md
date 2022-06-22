@@ -7,7 +7,7 @@ The EKF Slam library is structured into multiple parts to allow for maximum flex
 * The `slam` module is the pure mathematical implementation of an EKF-SLAM
 * The `models` module provides the definition of system descriptions for both the vehicle and tracked objects
 * The `manager` module allows for the combination of the `EKfSlam` module with use selected models
-* **TODO** The `association` module allows for the definition of different assosciation strategies for the slam module
+* The `association` module allows for the definition of different assosciation strategies for the slam module
 
 ## Including the library using FetchContent
 
