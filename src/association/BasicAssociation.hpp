@@ -13,87 +13,42 @@ namespace ekf_slam::association {
     template<std::size_t DIM, typename T>
     auto basic_association(const std::vector<std::pair<Eigen::Matrix<T, DIM, 1>, Eigen::Matrix<T, DIM, DIM>>> &tracks,
                            const std::vector<Eigen::Matrix<T, DIM, 1>> &measurements) -> AssociationResult {
-        // i is track, j is measurement
-        Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> associationMatrix{tracks.size(), measurements.size()};
-
-        const auto epsilon = 1 / (tracks.size() + 1.);
-
-        for (auto i = 0U; i < tracks.size(); ++i) {
-            for (auto j = 0U; j < measurements.size(); ++j) {
-                auto z_track = tracks[i].first;
-                auto cov = tracks[i].second;
-                auto z_tilde = z_track - measurements[j];
-
-                ASSERT_COV(cov);
-
-                auto mhd2 = z_tilde.transpose() * cov.inverse() * z_tilde;
-
-                assert(mhd2.rows() == 1 and mhd2.cols() == 1);
-
-                associationMatrix(i, j) = -mhd2(0, 0);
-            }
-        }
-
-        // Auction algorithm
-        std::vector<T> trackPrices(tracks.size());
-        std::vector<bool> observationMapped(measurements.size());
 
         // track index -> measurement index
-        std::map<std::size_t, std::size_t> track2Meas;
-
-        while (track2Meas.size() < std::min(measurements.size(), tracks.size())) {
-            std::size_t j = 0;
-            for (; j < measurements.size(); ++j) {
-                if (not observationMapped[j]) {
-                    break;
+        std::map<std::size_t, std::size_t> track2_meas;
+        for (std::size_t i = 0; i < tracks.size(); ++i) {
+            double lowest = std::numeric_limits<double>::max();
+            std::size_t index = std::numeric_limits<std::size_t>::max();
+            for (std::size_t j = 0; j < measurements.size(); ++j) {
+                double distance = std::hypot(tracks[i].first.x() - measurements[j].x(),
+                                             tracks[i].first.y() - measurements[j].y());
+                if (distance < 0.5 && lowest > distance) {
+                    lowest = distance;
+                    index = j;
                 }
             }
-
-            auto iMax = 0U;
-            auto maxVal = std::numeric_limits<T>::lowest();
-
-            for (auto i = 0U; i < tracks.size(); ++i) {
-                auto val = associationMatrix(i, j) - trackPrices[i];
-                if (val > maxVal) {
-                    iMax = i;
-                    maxVal = val;
-                }
+            if (index < std::numeric_limits<std::size_t>::max()) {
+                track2_meas[i] = index;
             }
-
-            if (track2Meas.contains(iMax)) {
-                observationMapped[track2Meas[iMax]] = false;
-            }
-            track2Meas[iMax] = j;
-
-            auto secondIMax = 0;
-            auto secondVal = std::numeric_limits<T>::lowest();
-
-            for (auto i = 0U; i < tracks.size(); ++i) {
-                auto val = associationMatrix(i, j) - trackPrices[i];
-                if (val > secondVal and secondIMax != iMax) {
-                    secondIMax = i;
-                    secondVal = val;
-                }
-            }
-            auto y_i = maxVal - secondVal;
-            trackPrices[iMax] += y_i + epsilon;
-            observationMapped[j] = true;
         }
+
 
         // Find measurements without tracks
-        std::set<std::size_t> associatedMeasurements;
-        for (const auto &[_, meas] : track2Meas) {
-            associatedMeasurements.emplace(meas);
+        std::set<std::size_t> associated_measurements;
+        for (const auto &[_, meas] : track2_meas) {
+            associated_measurements.emplace(meas);
         }
-        std::vector<std::size_t> newTracks;
+        std::vector<std::size_t> new_tracks;
         for (auto c = 0U; c < measurements.size(); ++c) {
-            if (not associatedMeasurements.contains(c)) {
-                newTracks.emplace_back(c);
+            if (not associated_measurements.contains(c)) {
+                new_tracks.emplace_back(c);
             }
         }
 
-        AssociationResult result{.track2Measure = track2Meas,
-                                 .newTracks = newTracks,
+        std::cerr << "Tracks: " << new_tracks.size() << std::endl;
+
+        AssociationResult result{.track2Measure = track2_meas,
+                                 .newTracks = new_tracks,
                                  .tracksToDelete = std::vector<std::size_t>{}};
 
         return result;
