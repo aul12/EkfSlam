@@ -192,24 +192,6 @@ namespace ekf_slam {
 
         auto associationResult = associationFunc(trackMeasurements, measurements);
 
-        /*
-         * Example 3 tracks, 3 measurements:
-         *
-         * Association (Track -> Meas)
-         * 1 -> 3
-         * 2 -> 2
-         *
-         * no measurement for track 3
-         *
-         * new track for measurement 1
-         *
-         * Initial: z=(m1, m2, m3), z_hat=(t1, t2, t3)
-         *
-         * After removal of non-associated: z=(m1, m2, m3), z_hat=(t1, t2)
-         *
-         *
-         */
-
         // Find tracks not associated
         std::set<std::size_t> associatedTracks;
         for (const auto &[track, _] : associationResult.track2Measure) {
@@ -254,14 +236,12 @@ namespace ekf_slam {
         // Update track-measurement vector based on reduced state vector
         std::tie(z_hat, s) = measure(x, p);
 
-
         // Reorder measurements to match tracks and only include associated measurements
         ObjectMeasurements reorderedMeasurements;
         for (auto track : associatedTracks) {
             auto meas = associationResult.track2Measure[track];
             reorderedMeasurements.emplace_back(measurements[meas]);
         }
-
 
         // Build Z Vector
         Z z(VEHICLE_MEAS_DIM + reorderedMeasurements.size() * OBJECT_MEAS_DIM);
@@ -296,9 +276,10 @@ namespace ekf_slam {
         for (auto c = 0U; c < associationResult.newTracks.size(); ++c) {
             auto offset = x.size() + invisibleObjects.size() * OBJECT_STATE_DIM + c * OBJECT_STATE_DIM;
 
-            auto initialEstimate = initialEstFunc(measurements[c], x_v(x));
+            auto measId = associationResult.newTracks[c];
+            auto initialEstimate = initialEstFunc(measurements[measId], x_v(x));
             Mat initialCov =
-                    initialCovFunc(measurements[c], x_v(x), p.block(0, 0, VEHICLE_STATE_DIM, VEHICLE_STATE_DIM)) +
+                    initialCovFunc(measurements[measId], x_v(x), p.block(0, 0, VEHICLE_STATE_DIM, VEHICLE_STATE_DIM)) +
                     vehicleDynamic.r_func();
 
 
