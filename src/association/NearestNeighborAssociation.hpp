@@ -15,7 +15,7 @@ namespace ekf_slam::association {
     auto nearest_neighbor_association(
             const std::vector<std::pair<Eigen::Matrix<T, DIM, 1>, Eigen::Matrix<T, DIM, DIM>>> &tracks,
             const std::vector<Eigen::Matrix<T, DIM, 1>> &measurements) -> AssociationResult {
-        static constexpr double GATE = 0.5;
+        static constexpr double GATE = 2;
 
         // track index -> measurement index
         std::map<std::size_t, std::size_t> track2Meas;
@@ -23,10 +23,10 @@ namespace ekf_slam::association {
             double lowest = std::numeric_limits<double>::max();
             std::size_t index = std::numeric_limits<std::size_t>::max();
             for (std::size_t j = 0; j < measurements.size(); ++j) {
-                double distance = std::hypot(tracks[i].first.x() - measurements[j].x(),
-                                             tracks[i].first.y() - measurements[j].y());
-                if (distance < GATE && lowest > distance) {
-                    lowest = distance;
+                auto zTilde = tracks[i].first - measurements[j];
+                auto mhd = zTilde.transpose() * tracks[i].second.inverse() * zTilde;
+                if (mhd < GATE && lowest > mhd) {
+                    lowest = mhd;
                     index = j;
                 }
             }
