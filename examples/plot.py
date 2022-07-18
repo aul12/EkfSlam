@@ -24,3 +24,5 @@ for snapshot in j:
     plt.gca().axis("equal")
     plt.savefig(f"out/{c}.png")
     c += 1
+    print(f"\rSaving {c}", end="")
+    plt.close(fig)
