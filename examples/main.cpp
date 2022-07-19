@@ -25,8 +25,8 @@ int main() {
     feenableexcept(FE_INVALID | FE_OVERFLOW | FE_DIVBYZERO); // Floating point exceptions
     auto dt = 0.01;
 
-    ekf_slam::Manager<>::Vehicle::Params vehicleParams{1e6, 1e6, 1e-6, 1e-6};
-    ekf_slam::Manager<>::Object::Params objectParams{1e1, 1e-6};
+    ekf_slam::Manager<>::Vehicle::Params vehicleParams{1e9, 1e6, 1e-8, 1e-8};
+    ekf_slam::Manager<>::Object::Params objectParams{1e1, 1e-8};
     ekf_slam::Manager manager{vehicleParams, objectParams};
 
     std::vector<ekf_slam::Manager<>::Object::State> cones;
