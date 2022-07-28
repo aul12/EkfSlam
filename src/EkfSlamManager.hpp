@@ -25,11 +25,11 @@ namespace ekf_slam {
         using EKF = EKFSlam<Vehicle::State::DIM, Vehicle::Meas::DIM, Object::State::DIM, Object::Meas::DIM, T>;
 
         Manager(typename Vehicle::Params vehicleParams, typename Object::Params objectParams) :
+            dt{NAN},
             ekf{Vehicle::make(dt, vehicleParams.sigmaA2, vehicleParams.sigmaDDPsi2, vehicleParams.sigmaV2,
                               vehicleParams.sigmaDPsi2),
                 Object::make(objectParams.sigmaPos2, objectParams.sigmaMeas), Object::getInitialPosition,
-                Object::getInitialCovariance},
-            dt{NAN} {
+                Object::getInitialCovariance} {
         }
 
         auto update(typename Vehicle::Meas vehicleMeas, const std::vector<typename Object::Meas> &objectMeasurements,
