@@ -14,6 +14,7 @@ endif ()
 
 add_library(${PROJECT_NAME} Util.cpp)
 target_include_directories(${PROJECT_NAME} INTERFACE .)
+target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic -Werror)
 
 if (USE_INSTALLED_EIGEN)
     target_link_libraries(${PROJECT_NAME} PUBLIC Eigen3::Eigen)

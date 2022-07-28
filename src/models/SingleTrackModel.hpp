@@ -123,7 +123,7 @@ namespace ekf_slam::models {
                 return meas.getVec();
             };
 
-            vehicleDynamicContainer.j_h = [](auto x) -> Eigen::Matrix<T, Meas::DIM, State::DIM> {
+            vehicleDynamicContainer.j_h = [](auto /*x*/) -> Eigen::Matrix<T, Meas::DIM, State::DIM> {
                 Eigen::Matrix<T, Meas::DIM, State::DIM> c = Eigen::Matrix<T, Meas::DIM, State::DIM>::Zero();
                 // clang-format off
                 c <<

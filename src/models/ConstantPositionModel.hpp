@@ -43,9 +43,9 @@ namespace ekf_slam::models {
         static auto make(T q, T r) {
             ObjectDynamicContainer<State::DIM, Meas::DIM, single_track<T>::State::DIM, T> objectDynamicContainer;
             objectDynamicContainer.f = [](auto x) -> typename State::Vec { return x; }; // State remains the same
-            objectDynamicContainer.j_f = [](auto x) ->
+            objectDynamicContainer.j_f = [](auto /*x*/) ->
                     typename State::Mat { return State::Mat::Identity(); }; // Jacobian is identity
-            objectDynamicContainer.q_func = [q](auto x) ->
+            objectDynamicContainer.q_func = [q](auto /*x*/) ->
                     typename State::Mat { return State::Mat::Identity() * q; }; // Equal noise on both coordinates
 
             // Conversion to local coordinates
@@ -60,7 +60,7 @@ namespace ekf_slam::models {
                 return meas.getVec();
             };
 
-            objectDynamicContainer.j_h_object = [](auto x_obj, auto x_vehicle) -> typename Meas::Mat {
+            objectDynamicContainer.j_h_object = [](auto /*x_obj*/, auto x_vehicle) -> typename Meas::Mat {
                 typename single_track<T>::State vehicle{x_vehicle};
                 typename Meas::Mat j_h{};
                 // clang-format off
@@ -100,7 +100,7 @@ namespace ekf_slam::models {
             return newState.getVec();
         }
 
-        static auto getInitialCovariance(typename Meas::Vec z, typename single_track<T>::State::Vec xVehicle,
+        static auto getInitialCovariance(typename Meas::Vec /*z*/, typename single_track<T>::State::Vec /*xVehicle*/,
                                          typename single_track<T>::State::Mat pVehicle) -> typename State::Mat {
             return pVehicle.block(0, 0, 2, 2);
         }
