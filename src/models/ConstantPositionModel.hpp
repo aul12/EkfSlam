@@ -14,13 +14,16 @@
 #include "SingleTrackModel.hpp"
 
 namespace ekf_slam::models {
-    template<typename T>
+    template<typename T, typename AdditionalData_>
     struct constant_position {
+        using AdditionalData = AdditionalData_;
+
         struct State {
-            T xPos, yPos;
             static constexpr std::size_t DIM = 2;
             using Vec = Eigen::Matrix<T, DIM, 1>;
             using Mat = Eigen::Matrix<T, DIM, DIM>;
+
+            T xPos, yPos;
 
             State(T xPos, T yPos) : xPos{xPos}, yPos{yPos} {};
 

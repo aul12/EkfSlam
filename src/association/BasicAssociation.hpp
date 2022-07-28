@@ -10,9 +10,10 @@
 #include "../EkfSlam.hpp"
 
 namespace ekf_slam::association {
-    template<std::size_t DIM, typename T>
-    auto basic_association(const std::vector<std::pair<Eigen::Matrix<T, DIM, 1>, Eigen::Matrix<T, DIM, DIM>>> &tracks,
-                           const std::vector<Eigen::Matrix<T, DIM, 1>> &measurements) -> AssociationResult {
+    template<std::size_t DIM, typename T, typename AdditionalData>
+    auto basic_association(
+            const std::vector<std::tuple<Eigen::Matrix<T, DIM, 1>, Eigen::Matrix<T, DIM, DIM>, AdditionalData>> &tracks,
+            const std::vector<std::pair<Eigen::Matrix<T, DIM, 1>, AdditionalData>> &measurements) -> AssociationResult {
         // i is track, j is measurement
         Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> associationMatrix{tracks.size(), measurements.size()};
 
@@ -20,9 +21,9 @@ namespace ekf_slam::association {
 
         for (auto i = 0U; i < tracks.size(); ++i) {
             for (auto j = 0U; j < measurements.size(); ++j) {
-                auto z_track = tracks[i].first;
-                auto cov = tracks[i].second;
-                auto z_tilde = z_track - measurements[j];
+                auto z_track = std::get<0>(tracks[i]);
+                auto cov = std::get<1>(tracks[i]);
+                auto z_tilde = z_track - measurements[j].first;
 
                 ASSERT_COV(cov);
 

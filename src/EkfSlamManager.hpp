@@ -14,15 +14,19 @@
 #include "models/SingleTrackModel.hpp"
 
 namespace ekf_slam {
+    enum class Color { ORANGE, BLUE, YELLOW };
+
     template<typename T_ = double, typename Vehicle_ = models::single_track<T_>,
-             typename Object_ = models::constant_position<T_>>
+             typename Object_ = models::constant_position<T_, Color>>
     class Manager {
       public:
         using T = T_;
         using Vehicle = Vehicle_;
         using Object = Object_;
+        using AdditionalData = typename Object::AdditionalData;
 
-        using EKF = EKFSlam<Vehicle::State::DIM, Vehicle::Meas::DIM, Object::State::DIM, Object::Meas::DIM, T>;
+        using EKF = EKFSlam<Vehicle::State::DIM, Vehicle::Meas::DIM, Object::State::DIM, Object::Meas::DIM, T,
+                            AdditionalData>;
 
         Manager(typename Vehicle::Params vehicleParams, typename Object::Params objectParams) :
             dt{NAN},
@@ -32,20 +36,23 @@ namespace ekf_slam {
                 Object::getInitialCovariance} {
         }
 
-        auto update(typename Vehicle::Meas vehicleMeas, const std::vector<typename Object::Meas> &objectMeasurements,
-                    double dt,
+        auto update(typename Vehicle::Meas vehicleMeas,
+                    const std::vector<std::pair<typename Object::Meas, AdditionalData>> &objectMeasurements, double dt,
                     typename EKF::AssociationFunc associationFunc =
-                            association::nearest_neighbor_association<Object::Meas::DIM, T>)
-                -> std::pair<typename Vehicle::State, std::vector<typename Object::State>> {
+                            association::nearest_neighbor_association<Object::Meas::DIM, T, AdditionalData>)
+                -> std::pair<typename Vehicle::State, std::vector<std::pair<typename Object::State, AdditionalData>>> {
             this->dt = dt;
             auto z_vehicle = vehicleMeas.getVec();
-            std::vector<typename Object::Meas::Vec> z_object;
+            std::vector<std::pair<typename Object::Meas::Vec, AdditionalData>> z_object;
             std::transform(objectMeasurements.cbegin(), objectMeasurements.cend(), std::back_inserter(z_object),
-                           [](const typename Object::Meas &meas) { return meas.getVec(); });
+                           [](const std::pair<typename Object::Meas, AdditionalData> &meas) {
+                               return std::pair{meas.first.getVec(), meas.second};
+                           });
+
             ekf.update(z_vehicle, z_object, associationFunc);
 
             typename Vehicle::State vehicleState{ekf.getVehicle()};
-            std::vector<typename Object::State> objects;
+            std::vector<std::pair<typename Object::State, AdditionalData>> objects;
             for (auto c = 0U; c < ekf.getNumberOfObjects(); ++c) {
                 objects.emplace_back(ekf.getObject(c));
             }

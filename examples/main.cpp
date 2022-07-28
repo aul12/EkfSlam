@@ -21,23 +21,29 @@ namespace nlohmann {
     };
 } // namespace nlohmann
 
+using AdditionalData = ekf_slam::Color;
+
 int main() {
+    std::map<AdditionalData, std::string> colorMap{{AdditionalData::YELLOW, "yellow"},
+                                                   {AdditionalData::BLUE, "blue"},
+                                                   {AdditionalData::ORANGE, "orange"}};
+
     feenableexcept(FE_INVALID | FE_OVERFLOW | FE_DIVBYZERO); // Floating point exceptions
     auto dt = 0.01;
 
     ekf_slam::Manager<>::Vehicle::Params vehicleParams{1e9, 1e6, 1e-8, 1e-8};
-    ekf_slam::Manager<>::Object::Params objectParams{1e1, 1e-8};
+    ekf_slam::Manager<>::Object::Params objectParams{1e0, 1e-8};
     ekf_slam::Manager manager{vehicleParams, objectParams};
 
-    std::vector<ekf_slam::Manager<>::Object::State> cones;
+    std::vector<std::pair<ekf_slam::Manager<>::Object::State, AdditionalData>> cones;
     for (auto c = 3; c < 100; c += 10) {
-        cones.emplace_back(c, 2);
-        cones.emplace_back(c, -2);
+        cones.emplace_back(ekf_slam::Manager<>::Object::State{static_cast<double>(c), 2}, AdditionalData::BLUE);
+        cones.emplace_back(ekf_slam::Manager<>::Object::State{static_cast<double>(c), -2}, AdditionalData::YELLOW);
     }
 
     ekf_slam::Manager<>::Vehicle::State vehicleState{0, 0, 0, 0, 0};
     auto f = ekf_slam::models::single_track<double>::make(dt, 0, 0, 0, 0).f;
-    auto coneH = ekf_slam::models::constant_position<double>::make(0, 0).h;
+    auto coneH = ekf_slam::models::constant_position<double, AdditionalData>::make(0, 0).h;
 
     auto ddPsi = [](auto t) -> double {
         if (t < 1) {
@@ -59,16 +65,17 @@ int main() {
 
     nlohmann::json json;
     for (std::size_t c = 0; c < 150; ++c) {
+        std::cout << c << std::endl;
         vehicleState.dPsi += ddPsi(c * dt);
         vehicleState.v += a(c * dt);
         vehicleState = ekf_slam::Manager<>::Vehicle::State(f(vehicleState.getVec()));
         ekf_slam::Manager<>::Vehicle::Meas vehicleMeas{vehicleState.v, vehicleState.dPsi};
 
-        std::vector<ekf_slam::Manager<>::Object::Meas> conesMeasured;
+        std::vector<std::pair<ekf_slam::Manager<>::Object::Meas, AdditionalData>> conesMeasured;
         for (auto cone : cones) {
-            auto coneLocal = ekf_slam::Manager<>::Object::Meas{coneH(cone.getVec(), vehicleState.getVec())};
+            auto coneLocal = ekf_slam::Manager<>::Object::Meas{coneH(cone.first.getVec(), vehicleState.getVec())};
             if (coneLocal.xPos > 0 and coneLocal.xPos < 30) { // In front of the vehicle, max 10m
-                conesMeasured.emplace_back(coneLocal);
+                conesMeasured.emplace_back(coneLocal, cone.second);
             }
         }
 
@@ -79,13 +86,22 @@ int main() {
         snapshot["vehicle"]["meas"] = vehicleMeas.getVec();
         snapshot["vehicle"]["est"] = vehicle.getVec();
         for (const auto &cone : estimatedCones) {
-            snapshot["estimatedCones"].emplace_back(cone.getVec());
+            nlohmann::json jsonCone;
+            jsonCone["state"] = cone.first.getVec();
+            jsonCone["color"] = colorMap[cone.second];
+            snapshot["estimatedCones"].emplace_back(jsonCone);
         }
         for (const auto &cone : conesMeasured) {
-            snapshot["measuredCones"].emplace_back(cone.getVec());
+            nlohmann::json jsonCone;
+            jsonCone["state"] = cone.first.getVec();
+            jsonCone["color"] = colorMap[cone.second];
+            snapshot["measuredCones"].emplace_back(jsonCone);
         }
         for (const auto &cone : cones) {
-            snapshot["cones"].emplace_back(cone.getVec());
+            nlohmann::json jsonCone;
+            jsonCone["state"] = cone.first.getVec();
+            jsonCone["color"] = colorMap[cone.second];
+            snapshot["cones"].emplace_back(jsonCone);
         }
         json.emplace_back(snapshot);
 

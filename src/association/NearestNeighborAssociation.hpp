@@ -11,10 +11,10 @@
 #include "../EkfSlam.hpp"
 
 namespace ekf_slam::association {
-    template<std::size_t DIM, typename T>
+    template<std::size_t DIM, typename T, typename AdditionalData>
     auto nearest_neighbor_association(
-            const std::vector<std::pair<Eigen::Matrix<T, DIM, 1>, Eigen::Matrix<T, DIM, DIM>>> &tracks,
-            const std::vector<Eigen::Matrix<T, DIM, 1>> &measurements) -> AssociationResult {
+            const std::vector<std::tuple<Eigen::Matrix<T, DIM, 1>, Eigen::Matrix<T, DIM, DIM>, AdditionalData>> &tracks,
+            const std::vector<std::pair<Eigen::Matrix<T, DIM, 1>, AdditionalData>> &measurements) -> AssociationResult {
         static constexpr double GATE = 2;
 
         // track index -> measurement index
@@ -23,8 +23,8 @@ namespace ekf_slam::association {
             double lowest = std::numeric_limits<double>::max();
             std::size_t index = std::numeric_limits<std::size_t>::max();
             for (std::size_t j = 0; j < measurements.size(); ++j) {
-                auto zTilde = tracks[i].first - measurements[j];
-                auto mhd = zTilde.transpose() * tracks[i].second.inverse() * zTilde;
+                auto zTilde = std::get<0>(tracks[i]) - std::get<0>(measurements[j]);
+                auto mhd = zTilde.transpose() * std::get<1>(tracks[i]).inverse() * zTilde;
                 if (mhd < GATE && lowest > mhd) {
                     lowest = mhd;
                     index = j;
@@ -42,14 +42,16 @@ namespace ekf_slam::association {
         std::set<std::size_t> trackIdsToErase;
         for (const auto &[newTrackId, measId] : track2Meas) {
             if (meas2Track.contains(measId)) { // Measurement is already associated to another track
-                auto meas = measurements[measId];
+                auto meas = std::get<0>(measurements[measId]);
 
                 auto oldTrackId = meas2Track[measId];
                 auto oldTrack = tracks[oldTrackId];
-                auto oldMhd = (oldTrack.first - meas).transpose() * oldTrack.second.inverse() * (oldTrack.first - meas);
+                auto oldMhd = (std::get<0>(oldTrack) - meas).transpose() * std::get<1>(oldTrack).inverse() *
+                              (std::get<0>(oldTrack) - meas);
 
                 auto newTrack = tracks[newTrackId];
-                auto newMhd = (newTrack.first - meas).transpose() * newTrack.second.inverse() * (newTrack.first - meas);
+                auto newMhd = (std::get<0>(newTrack) - meas).transpose() * std::get<1>(newTrack).inverse() *
+                              (std::get<0>(newTrack) - meas);
 
                 if (oldMhd < newMhd) {                   // Old association is better
                     trackIdsToErase.emplace(newTrackId); // Erase new association
