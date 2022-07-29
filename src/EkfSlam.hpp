@@ -23,7 +23,7 @@ namespace ekf_slam {
 
         std::map<TrackId, MeasId> track2Measure;
         std::vector<MeasId> newTracks;
-        std::vector<TrackId> tracksToDelete;
+        std::vector<TrackId> tracksToDelete; // @TODO set
     };
 
     template<std::size_t VEHICLE_STATE_DIM, std::size_t VEHICLE_MEAS_DIM, std::size_t OBJECT_STATE_DIM,
@@ -202,17 +202,25 @@ namespace ekf_slam {
             associatedTracks.emplace(track);
         }
 
+
+        // Split objects into associated objects and objects that are not associated or should be deleted
+
         // Warning: Only stored the covariance of the invisible object not the relation to other objects and especially
         // the vehicle. Not optimal, but probably works
         std::vector<std::tuple<typename ObjectDynamic::X, typename ObjectDynamic::P, AdditionalData>> invisibleObjects;
-        auto lastIndex = numObjects(x) - 1;
 
-        // Remove tracks not associated
-
-        /*
-         * TODO Moved tracks are not reconsidered!
-         */
+        auto reducedSize = VEHICLE_STATE_DIM + associatedTracks.size() * OBJECT_STATE_DIM;
+        Eigen::Matrix<T, Eigen::Dynamic, 1> reducedX = Eigen::Matrix<T, Eigen::Dynamic, 1>::Zero(reducedSize);
+        Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> reducedP =
+                Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>::Zero(reducedSize, reducedSize);
+        std::vector<AdditionalData> reducedAdditionalData;
         std::map<std::size_t, std::size_t> oldId2TrackId;
+        auto reducedIndex = 0;
+
+        reducedX.template block<VEHICLE_STATE_DIM, 1>(0, 0) = x_v(x);
+        reducedP.template block<VEHICLE_STATE_DIM, VEHICLE_STATE_DIM>(0, 0) =
+                p.template block<VEHICLE_STATE_DIM, VEHICLE_STATE_DIM>(0, 0);
+
         for (auto i = 0U; i < numObjects(x); ++i) {
             bool trackToDelete = false;
             for (auto toDelete : associationResult.tracksToDelete) {
@@ -222,39 +230,31 @@ namespace ekf_slam {
                 }
             }
 
-            if (not associatedTracks.contains(i) or trackToDelete) {
-                auto offset = VEHICLE_STATE_DIM + i * OBJECT_STATE_DIM;
-                if (not trackToDelete) {
-                    invisibleObjects.emplace_back(x_o(x, i),
-                                                  p.template block<OBJECT_STATE_DIM, OBJECT_STATE_DIM>(offset, offset),
-                                                  oldAdditionalData[i]);
-                }
+            auto offset = VEHICLE_STATE_DIM + i * OBJECT_STATE_DIM;
+            auto state = x_o(x, i);
+            auto cov = p.template block<OBJECT_STATE_DIM, OBJECT_STATE_DIM>(offset, offset);
 
-                if (i != lastIndex) {
-                    auto lastOffset = VEHICLE_STATE_DIM + lastIndex * OBJECT_STATE_DIM;
-                    x.block(offset, 0, OBJECT_STATE_DIM, 1) = x.block(lastOffset, 0, OBJECT_STATE_DIM, 1);
-                    p.block(offset, 0, OBJECT_STATE_DIM, p.cols()) = p.block(lastOffset, 0, OBJECT_STATE_DIM, p.cols());
-                    p.block(0, offset, p.rows(), OBJECT_STATE_DIM) = p.block(0, lastOffset, p.rows(), OBJECT_STATE_DIM);
-                    oldAdditionalData[i] = oldAdditionalData[lastIndex];
-                    oldId2TrackId[lastIndex] = i;
-                }
-                lastIndex -= 1;
+            if (not associatedTracks.contains(i) and not trackToDelete) {
+                invisibleObjects.emplace_back(state, cov, oldAdditionalData[i]);
+            } else if (associatedTracks.contains(i)) {
+                auto reducedOffset = VEHICLE_STATE_DIM + reducedIndex * OBJECT_STATE_DIM;
+                reducedX.template block<OBJECT_STATE_DIM, 1>(reducedOffset, 0) = state;
+                reducedP.template block<OBJECT_STATE_DIM, OBJECT_STATE_DIM>(reducedOffset, reducedOffset) = cov;
+                reducedAdditionalData.emplace_back(additionalData[i]);
+                oldId2TrackId[i] = reducedIndex;
+                reducedIndex += 1;
             }
         }
-        auto size = VEHICLE_STATE_DIM + (lastIndex + 1) * OBJECT_STATE_DIM;
-        x.conservativeResize(size);
-        p.conservativeResize(size, size);
-        oldAdditionalData.resize(lastIndex + 1);
 
         // Update track-measurement vector based on reduced state vector
-        std::tie(z_hat, s) = measure(x, p);
+        std::tie(z_hat, s) = measure(reducedX, reducedP);
 
         // Reorder measurements to match tracks and only include associated measurements
         ObjectMeasurements reorderedMeasurements(associatedTracks.size());
-        for (auto track : associatedTracks) {
-            auto trackId = oldId2TrackId.contains(track) ? oldId2TrackId[track] : track;
-            auto meas = associationResult.track2Measure[track];
-            reorderedMeasurements.at(trackId) = measurements.at(meas);
+        for (auto oldTrackId : associatedTracks) {
+            auto newTrackId = oldId2TrackId.at(oldTrackId);
+            auto meas = associationResult.track2Measure[oldTrackId];
+            reorderedMeasurements.at(newTrackId) = measurements.at(meas);
         }
 
         // Build Z Vector
@@ -266,23 +266,24 @@ namespace ekf_slam {
         }
 
         // Calculate Kalman Gain
-        Mat K = p * getdh(x).transpose() * s.inverse();
+        Mat K = reducedP * getdh(reducedX).transpose() * s.inverse();
 
         // Innovation
         Vec tildeZ = z - z_hat;
-        x = x + K * tildeZ;
-        p = p - K * s * K.transpose();
-        ASSERT_COV(p);
+        reducedX = reducedX + K * tildeZ;
+        reducedP = reducedP - K * s * K.transpose();
+        ASSERT_COV(reducedP);
 
         // Readd tracks and add new track
-        auto newSize = x.size() + (invisibleObjects.size() + associationResult.newTracks.size()) * OBJECT_STATE_DIM;
+        auto newSize =
+                reducedX.size() + (invisibleObjects.size() + associationResult.newTracks.size()) * OBJECT_STATE_DIM;
         X completeX = X::Zero(newSize);
         P completeP = P::Zero(newSize, newSize);
-        completeX.block(0, 0, x.size(), 1) = x;
-        completeP.block(0, 0, p.rows(), p.cols()) = p;
+        completeX.block(0, 0, reducedX.size(), 1) = reducedX;
+        completeP.block(0, 0, reducedP.rows(), reducedP.cols()) = reducedP;
         // Readd tracks
         for (auto c = 0U; c < invisibleObjects.size(); ++c) {
-            auto offset = x.size() + c * OBJECT_STATE_DIM;
+            auto offset = reducedX.size() + c * OBJECT_STATE_DIM;
             completeX.block(offset, 0, OBJECT_STATE_DIM, 1) = std::get<0>(invisibleObjects[c]);
             completeP.block(offset, offset, OBJECT_STATE_DIM, OBJECT_STATE_DIM) = std::get<1>(invisibleObjects[c]);
             oldAdditionalData.emplace_back(std::get<2>(invisibleObjects[c]));
@@ -290,7 +291,7 @@ namespace ekf_slam {
 
         // New tracks
         for (auto c = 0U; c < associationResult.newTracks.size(); ++c) {
-            auto offset = x.size() + invisibleObjects.size() * OBJECT_STATE_DIM + c * OBJECT_STATE_DIM;
+            auto offset = reducedX.size() + invisibleObjects.size() * OBJECT_STATE_DIM + c * OBJECT_STATE_DIM;
 
             auto measId = associationResult.newTracks[c];
             auto initialEstimate = initialEstFunc(measurements[measId].first, x_v(x));
