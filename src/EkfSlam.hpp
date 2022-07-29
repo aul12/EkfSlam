@@ -22,8 +22,8 @@ namespace ekf_slam {
         using MeasId = std::size_t;
 
         std::map<TrackId, MeasId> track2Measure;
-        std::vector<MeasId> newTracks;
-        std::vector<TrackId> tracksToDelete; // @TODO set
+        std::set<MeasId> newTracks;
+        std::set<TrackId> tracksToDelete;
     };
 
     template<std::size_t VEHICLE_STATE_DIM, std::size_t VEHICLE_MEAS_DIM, std::size_t OBJECT_STATE_DIM,
@@ -222,19 +222,11 @@ namespace ekf_slam {
                 p.template block<VEHICLE_STATE_DIM, VEHICLE_STATE_DIM>(0, 0);
 
         for (auto i = 0U; i < numObjects(x); ++i) {
-            bool trackToDelete = false;
-            for (auto toDelete : associationResult.tracksToDelete) {
-                if (toDelete == i) {
-                    trackToDelete = true;
-                    break;
-                }
-            }
-
             auto offset = VEHICLE_STATE_DIM + i * OBJECT_STATE_DIM;
             auto state = x_o(x, i);
             auto cov = p.template block<OBJECT_STATE_DIM, OBJECT_STATE_DIM>(offset, offset);
 
-            if (not associatedTracks.contains(i) and not trackToDelete) {
+            if (not associatedTracks.contains(i) and not associationResult.tracksToDelete.contains(i)) {
                 invisibleObjects.emplace_back(state, cov, oldAdditionalData[i]);
             } else if (associatedTracks.contains(i)) {
                 auto reducedOffset = VEHICLE_STATE_DIM + reducedIndex * OBJECT_STATE_DIM;
@@ -281,28 +273,28 @@ namespace ekf_slam {
         P completeP = P::Zero(newSize, newSize);
         completeX.block(0, 0, reducedX.size(), 1) = reducedX;
         completeP.block(0, 0, reducedP.rows(), reducedP.cols()) = reducedP;
+
+        auto offset = reducedX.size();
+
         // Readd tracks
         for (auto c = 0U; c < invisibleObjects.size(); ++c) {
-            auto offset = reducedX.size() + c * OBJECT_STATE_DIM;
             completeX.block(offset, 0, OBJECT_STATE_DIM, 1) = std::get<0>(invisibleObjects[c]);
             completeP.block(offset, offset, OBJECT_STATE_DIM, OBJECT_STATE_DIM) = std::get<1>(invisibleObjects[c]);
             oldAdditionalData.emplace_back(std::get<2>(invisibleObjects[c]));
+            offset += OBJECT_STATE_DIM;
         }
 
         // New tracks
-        for (auto c = 0U; c < associationResult.newTracks.size(); ++c) {
-            auto offset = reducedX.size() + invisibleObjects.size() * OBJECT_STATE_DIM + c * OBJECT_STATE_DIM;
-
-            auto measId = associationResult.newTracks[c];
+        for (auto measId : associationResult.newTracks) {
             auto initialEstimate = initialEstFunc(measurements[measId].first, x_v(x));
             Mat initialCov = initialCovFunc(measurements[measId].first, x_v(x),
                                             p.block(0, 0, VEHICLE_STATE_DIM, VEHICLE_STATE_DIM)) +
                              vehicleDynamic.r_func();
 
-
             completeX.block(offset, 0, OBJECT_STATE_DIM, 1) = initialEstimate;
             completeP.block(offset, offset, OBJECT_STATE_DIM, OBJECT_STATE_DIM) = initialCov;
             oldAdditionalData.emplace_back(measurements[measId].second);
+            offset += OBJECT_STATE_DIM;
         }
 
         ASSERT_COV(completeP);

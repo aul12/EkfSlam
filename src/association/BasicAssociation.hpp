@@ -86,16 +86,16 @@ namespace ekf_slam::association {
         for (const auto &[_, meas] : track2Meas) {
             associatedMeasurements.emplace(meas);
         }
-        std::vector<std::size_t> newTracks;
+        std::set<std::size_t> newTracks;
         for (auto c = 0U; c < measurements.size(); ++c) {
             if (not associatedMeasurements.contains(c)) {
-                newTracks.emplace_back(c);
+                newTracks.emplace(c);
             }
         }
 
         AssociationResult result{.track2Measure = track2Meas,
                                  .newTracks = newTracks,
-                                 .tracksToDelete = std::vector<std::size_t>{}};
+                                 .tracksToDelete = std::set<std::size_t>{}};
 
         return result;
     }
