@@ -14,17 +14,10 @@
 #include <set>
 
 #include "DynamicContainer.hpp"
+#include "Types.hpp"
 #include "Util.hpp"
 
 namespace ekf_slam {
-    struct AssociationResult {
-        using TrackId = std::size_t;
-        using MeasId = std::size_t;
-
-        std::map<TrackId, MeasId> track2Measure;
-        std::set<MeasId> newTracks;
-        std::set<TrackId> tracksToDelete;
-    };
 
     template<std::size_t VEHICLE_STATE_DIM, std::size_t VEHICLE_MEAS_DIM, std::size_t OBJECT_STATE_DIM,
              std::size_t OBJECT_MEAS_DIM, typename T, typename AdditionalData>
@@ -42,8 +35,12 @@ namespace ekf_slam {
         using Vec = Eigen::Matrix<T, Eigen::Dynamic, 1>;
         using Mat = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>;
 
-        using ObjectMeasurements = std::vector<std::pair<typename ObjectDynamic::Z, AdditionalData>>;
-        using TrackList = std::vector<std::pair<typename ObjectDynamic::X, typename ObjectDynamic::P>>;
+        using AssociationResult = types::AssociationResult;
+        using ObjectMeasurement = types::ObjectMeasurement<OBJECT_STATE_DIM, T, AdditionalData>;
+        using Track = types::Track<OBJECT_STATE_DIM, T, AdditionalData>;
+
+        using ObjectMeasurements = std::vector<ObjectMeasurement>;
+        using Tracks = std::vector<Track>;
 
         using InitialEstFunc =
                 std::function<auto(typename ObjectDynamic::Z, typename VehicleDynamic::X)->typename ObjectDynamic::X>;
@@ -54,11 +51,7 @@ namespace ekf_slam {
         /*
          * Tracks + Covariance and Measurements -> Association
          */
-        using AssociationFunc =
-                std::function<auto(const std::vector<std::tuple<typename ObjectDynamic::Z, typename ObjectDynamic::R,
-                                                                AdditionalData>> &,
-                                   const std::vector<std::pair<typename ObjectDynamic::Z, AdditionalData>> &)
-                                      ->AssociationResult>;
+        using AssociationFunc = std::function<auto(const Tracks &, const ObjectMeasurements &)->AssociationResult>;
 
         // Functions to be used by user
         EKFSlam(VehicleDynamic vehicleDynamic, ObjectDynamic objectDynamic, InitialEstFunc initialEstFunc,
@@ -186,7 +179,7 @@ namespace ekf_slam {
 
         auto [z_hat, s] = measure(x, p);
 
-        std::vector<std::tuple<typename ObjectDynamic::Z, typename ObjectDynamic::R, AdditionalData>> trackMeasurements;
+        Tracks trackMeasurements;
         for (auto c = 0U; c < numObjects(x); ++c) {
             auto offset = VEHICLE_MEAS_DIM + c * OBJECT_MEAS_DIM;
             auto meas = z_hat.template block<OBJECT_MEAS_DIM, 1>(offset, 0);
@@ -254,7 +247,7 @@ namespace ekf_slam {
         z.block(0, 0, VEHICLE_MEAS_DIM, 1) = vehicleMeas;
         for (auto c = 0U; c < reorderedMeasurements.size(); ++c) {
             z.template block<OBJECT_MEAS_DIM, 1>(VEHICLE_MEAS_DIM + c * OBJECT_MEAS_DIM, 0) =
-                    reorderedMeasurements[c].first;
+                    reorderedMeasurements[c].meas;
         }
 
         // Calculate Kalman Gain
@@ -286,14 +279,14 @@ namespace ekf_slam {
 
         // New tracks
         for (auto measId : associationResult.newTracks) {
-            auto initialEstimate = initialEstFunc(measurements[measId].first, x_v(x));
-            Mat initialCov = initialCovFunc(measurements[measId].first, x_v(x),
+            auto initialEstimate = initialEstFunc(measurements[measId].meas, x_v(x));
+            Mat initialCov = initialCovFunc(measurements[measId].meas, x_v(x),
                                             p.block(0, 0, VEHICLE_STATE_DIM, VEHICLE_STATE_DIM)) +
                              vehicleDynamic.r_func();
 
             completeX.block(offset, 0, OBJECT_STATE_DIM, 1) = initialEstimate;
             completeP.block(offset, offset, OBJECT_STATE_DIM, OBJECT_STATE_DIM) = initialCov;
-            oldAdditionalData.emplace_back(measurements[measId].second);
+            oldAdditionalData.emplace_back(measurements[measId].additionalData);
             offset += OBJECT_STATE_DIM;
         }
 

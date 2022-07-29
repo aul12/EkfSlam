@@ -43,10 +43,10 @@ namespace ekf_slam {
                 -> std::pair<typename Vehicle::State, std::vector<std::pair<typename Object::State, AdditionalData>>> {
             this->dt = dt;
             auto z_vehicle = vehicleMeas.getVec();
-            std::vector<std::pair<typename Object::Meas::Vec, AdditionalData>> z_object;
+            typename EKF::ObjectMeasurements z_object;
             std::transform(objectMeasurements.cbegin(), objectMeasurements.cend(), std::back_inserter(z_object),
                            [](const std::pair<typename Object::Meas, AdditionalData> &meas) {
-                               return std::pair{meas.first.getVec(), meas.second};
+                               return typename EKF::ObjectMeasurement{meas.first.getVec(), meas.second};
                            });
 
             ekf.update(z_vehicle, z_object, associationFunc);

@@ -7,13 +7,13 @@
 #ifndef EKFSLAM_BASICASSOCIATION_HPP
 #define EKFSLAM_BASICASSOCIATION_HPP
 
-#include "../EkfSlam.hpp"
+#include "../Types.hpp"
 
 namespace ekf_slam::association {
     template<std::size_t DIM, typename T, typename AdditionalData>
-    auto basic_association(
-            const std::vector<std::tuple<Eigen::Matrix<T, DIM, 1>, Eigen::Matrix<T, DIM, DIM>, AdditionalData>> &tracks,
-            const std::vector<std::pair<Eigen::Matrix<T, DIM, 1>, AdditionalData>> &measurements) -> AssociationResult {
+    auto basic_association(const std::vector<types::Track<DIM, T, AdditionalData>> &tracks,
+                           const std::vector<types::ObjectMeasurement<DIM, T, AdditionalData>> &measurements)
+            -> types::AssociationResult {
         // i is track, j is measurement
         Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> associationMatrix{tracks.size(), measurements.size()};
 
@@ -21,9 +21,9 @@ namespace ekf_slam::association {
 
         for (auto i = 0U; i < tracks.size(); ++i) {
             for (auto j = 0U; j < measurements.size(); ++j) {
-                auto z_track = std::get<0>(tracks[i]);
-                auto cov = std::get<1>(tracks[i]);
-                auto z_tilde = z_track - measurements[j].first;
+                auto z_track = tracks[i].state;
+                auto cov = tracks[i].cov;
+                auto z_tilde = z_track - measurements[j].meas;
 
                 ASSERT_COV(cov);
 
@@ -93,7 +93,7 @@ namespace ekf_slam::association {
             }
         }
 
-        AssociationResult result{.track2Measure = track2Meas,
+        types::AssociationResult result{.track2Measure = track2Meas,
                                  .newTracks = newTracks,
                                  .tracksToDelete = std::set<std::size_t>{}};
 
