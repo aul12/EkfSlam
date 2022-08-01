@@ -10,20 +10,19 @@
 #include "EkfSlam.hpp"
 #include "association/BasicAssociation.hpp"
 #include "association/NearestNeighborAssociation.hpp"
+#include "models/Color.hpp"
 #include "models/ConstantPositionModel.hpp"
 #include "models/SingleTrackModel.hpp"
 
 namespace ekf_slam {
-    enum class Color { ORANGE, BLUE, YELLOW };
-
     template<typename T_ = double, typename Vehicle_ = models::single_track<T_>,
-             typename Object_ = models::constant_position<T_, Color>>
+             typename Object_ = models::constant_position<T_>, typename AdditionalData_ = models::Color>
     class Manager {
       public:
         using T = T_;
         using Vehicle = Vehicle_;
         using Object = Object_;
-        using AdditionalData = typename Object::AdditionalData;
+        using AdditionalData = AdditionalData_;
 
         using EKF = EKFSlam<Vehicle::State::DIM, Vehicle::Meas::DIM, Object::State::DIM, Object::Meas::DIM, T,
                             AdditionalData>;

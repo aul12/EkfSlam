@@ -14,10 +14,8 @@
 #include "SingleTrackModel.hpp"
 
 namespace ekf_slam::models {
-    template<typename T, typename AdditionalData_>
+    template<typename T>
     struct constant_position {
-        using AdditionalData = AdditionalData_;
-
         struct State {
             static constexpr std::size_t DIM = 2;
             using Vec = Eigen::Matrix<T, DIM, 1>;

@@ -21,7 +21,7 @@ namespace nlohmann {
     };
 } // namespace nlohmann
 
-using AdditionalData = ekf_slam::Color;
+using AdditionalData = ekf_slam::models::Color;
 
 int main() {
     std::map<AdditionalData, std::string> colorMap{{AdditionalData::YELLOW, "yellow"},
@@ -43,7 +43,7 @@ int main() {
 
     ekf_slam::Manager<>::Vehicle::State vehicleState{0, 0, 0, 0, 0};
     auto f = ekf_slam::models::single_track<double>::make(dt, 0, 0, 0, 0).f;
-    auto coneH = ekf_slam::models::constant_position<double, AdditionalData>::make(0, 0).h;
+    auto coneH = ekf_slam::models::constant_position<double>::make(0, 0).h;
 
     auto ddPsi = [](auto t) -> double {
         if (t < 1) {
