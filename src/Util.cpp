@@ -8,7 +8,7 @@
 
 namespace ekf_slam::util {
     auto isCovarianceMatrix(const Eigen::MatrixXd &mat) -> bool {
-        return (mat.rows() == mat.cols()) /*and isPsd(mat)*/ and
+        return (mat.rows() == mat.cols()) and mat.determinant() >= -0.1 and
                ((mat - mat.transpose()).lpNorm<Eigen::Infinity>() < 0.1);
     }
 

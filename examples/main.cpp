@@ -64,7 +64,7 @@ int main() {
     };
 
     nlohmann::json json;
-    for (std::size_t c = 0; c < 150; ++c) {
+    for (std::size_t c = 0; c < 200; ++c) {
         std::cout << c << std::endl;
         vehicleState.dPsi += ddPsi(c * dt);
         vehicleState.v += a(c * dt);
@@ -74,7 +74,7 @@ int main() {
         std::vector<std::pair<ekf_slam::Manager<>::Object::Meas, AdditionalData>> conesMeasured;
         for (auto cone : cones) {
             auto coneLocal = ekf_slam::Manager<>::Object::Meas{coneH(cone.first.getVec(), vehicleState.getVec())};
-            if (coneLocal.xPos > 0 and coneLocal.xPos < 30) { // In front of the vehicle, max 10m
+            if (coneLocal.xPos > 0 and coneLocal.xPos < 30) { // In front of the vehicle, max 30m
                 conesMeasured.emplace_back(coneLocal, cone.second);
             }
         }
