@@ -200,7 +200,7 @@ namespace ekf_slam {
 
         // Warning: Only stored the covariance of the invisible object not the relation to other objects and especially
         // the vehicle. Not optimal, but probably works
-        std::vector<std::tuple<typename ObjectDynamic::X, typename ObjectDynamic::P, AdditionalData>> invisibleObjects;
+        Tracks invisibleObjects;
 
         auto reducedSize = VEHICLE_STATE_DIM + associatedTracks.size() * OBJECT_STATE_DIM;
         Eigen::Matrix<T, Eigen::Dynamic, 1> reducedX = Eigen::Matrix<T, Eigen::Dynamic, 1>::Zero(reducedSize);
@@ -225,7 +225,7 @@ namespace ekf_slam {
                 auto reducedOffset = VEHICLE_STATE_DIM + reducedIndex * OBJECT_STATE_DIM;
                 reducedX.template block<OBJECT_STATE_DIM, 1>(reducedOffset, 0) = state;
                 reducedP.template block<OBJECT_STATE_DIM, OBJECT_STATE_DIM>(reducedOffset, reducedOffset) = cov;
-                reducedAdditionalData.emplace_back(additionalData[i]);
+                reducedAdditionalData.emplace_back(oldAdditionalData[i]);
                 oldId2TrackId[i] = reducedIndex;
                 reducedIndex += 1;
             }
@@ -266,14 +266,15 @@ namespace ekf_slam {
         P completeP = P::Zero(newSize, newSize);
         completeX.block(0, 0, reducedX.size(), 1) = reducedX;
         completeP.block(0, 0, reducedP.rows(), reducedP.cols()) = reducedP;
+        auto newAdditionalData = reducedAdditionalData;
 
         auto offset = reducedX.size();
 
         // Readd tracks
         for (auto c = 0U; c < invisibleObjects.size(); ++c) {
-            completeX.block(offset, 0, OBJECT_STATE_DIM, 1) = std::get<0>(invisibleObjects[c]);
-            completeP.block(offset, offset, OBJECT_STATE_DIM, OBJECT_STATE_DIM) = std::get<1>(invisibleObjects[c]);
-            oldAdditionalData.emplace_back(std::get<2>(invisibleObjects[c]));
+            completeX.block(offset, 0, OBJECT_STATE_DIM, 1) = invisibleObjects[c].state;
+            completeP.block(offset, offset, OBJECT_STATE_DIM, OBJECT_STATE_DIM) = invisibleObjects[c].cov;
+            newAdditionalData.emplace_back(invisibleObjects[c].additionalData);
             offset += OBJECT_STATE_DIM;
         }
 
@@ -286,13 +287,13 @@ namespace ekf_slam {
 
             completeX.block(offset, 0, OBJECT_STATE_DIM, 1) = initialEstimate;
             completeP.block(offset, offset, OBJECT_STATE_DIM, OBJECT_STATE_DIM) = initialCov;
-            oldAdditionalData.emplace_back(measurements[measId].additionalData);
+            newAdditionalData.emplace_back(measurements[measId].additionalData);
             offset += OBJECT_STATE_DIM;
         }
 
         ASSERT_COV(completeP);
 
-        return std::make_tuple(completeX, completeP, oldAdditionalData);
+        return std::make_tuple(completeX, completeP, newAdditionalData);
     }
 
     template<std::size_t VEHICLE_STATE_DIM, std::size_t VEHICLE_MEAS_DIM, std::size_t OBJECT_STATE_DIM,
