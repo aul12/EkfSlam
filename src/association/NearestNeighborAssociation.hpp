@@ -15,7 +15,7 @@ namespace ekf_slam::association {
     auto nearest_neighbor_association(const std::vector<types::Track<DIM, T, AdditionalData>> &tracks,
                                       const std::vector<types::ObjectMeasurement<DIM, T, AdditionalData>> &measurements)
             -> types::AssociationResult {
-        static constexpr double GATE = 2;
+        static constexpr double GATE = 1;
 
         // track index -> measurement index
         std::map<std::size_t, std::size_t> track2Meas;
@@ -23,10 +23,17 @@ namespace ekf_slam::association {
             double lowest = std::numeric_limits<double>::max();
             std::size_t index = std::numeric_limits<std::size_t>::max();
             for (std::size_t j = 0; j < measurements.size(); ++j) {
-                auto zTilde = tracks[i].state - measurements[j].meas;
-                auto mhd = zTilde.transpose() * tracks[i].cov.inverse() * zTilde;
-                if (mhd < GATE && lowest > mhd) {
-                    lowest = mhd;
+                auto x_diff = tracks[i].state.x() - measurements[j].meas.x();
+                auto y_diff = tracks[i].state.y() - measurements[j].meas.y();
+
+                // Mahalanobis distance gets wrong results, covariance matrix gets too big
+                //auto zTilde = tracks[i].state - measurements[j].meas;
+                //auto mhd = zTilde.transpose() * tracks[i].cov.inverse() * zTilde;
+                //if (mhd < GATE && lowest > mhd) {
+
+                auto distance = std::hypot(x_diff, y_diff);
+                if(distance < GATE && lowest > distance) {
+                    lowest = distance;
                     index = j;
                 }
             }
