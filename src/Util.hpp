@@ -17,12 +17,13 @@ namespace ekf_slam::util {
 } // namespace ekf_slam::util
 
 #define ASSERT_COV(x)                                                                                                  \
-    if (not ekf_slam::util::isCovarianceMatrix(x)) {                                                                   \
+    /*if (not ekf_slam::util::isCovarianceMatrix(x)) {                                                                   \
         std::cout << __FILE__ << ":" << __LINE__ << ":\n\t" << #x << " is not a covariance Matrix:\n"                  \
                   << x << "\n"                                                                                         \
                   << "with det(" << #x << ")=" << x.determinant() << std::endl;                                        \
         std::abort();                                                                                                  \
-    }
+    }*/
+
 
 #define PRINT_MAT(x) ekf_slam::util::printMatImpl(__FILE__, __LINE__, #x, x);
 
